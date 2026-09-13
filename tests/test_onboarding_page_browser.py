@@ -44,6 +44,35 @@ def test_uptime_pinger_blocked_state_reflects_render_service_url_presence(page, 
     assert page.is_visible("#uptime-pinger-form-section")
 
 
+def test_supabase_insufficient_permissions_error_retranslates_on_language_switch(
+    page, live_app_url
+):
+    """supabaseErrorForReason("insufficient_permissions", ...) combines our
+    own translated copy with Supabase's relayed message -- unlike
+    project_creation_rejected's pure-Supabase-text case, our half of this
+    string must re-render on a language switch like every other tracked
+    error, not stay frozen in whatever language was active when the error
+    first appeared."""
+    page.goto(live_app_url)
+    # A closed/locked <details> renders no content at all (not just
+    # visually hidden) -- unlock it first, same as the other browser tests
+    # that need to read text out of a frame that starts locked/collapsed.
+    page.evaluate("unlockFrame('supabase')")
+    page.evaluate(
+        "supabaseErrorForReason("
+        "'insufficient_permissions', 'Missing required scope: Organizations')"
+    )
+    assert page.inner_text("#supabase-error") == (
+        "Your token is missing a required permission. Check the permissions "
+        "listed above and try again. Missing required scope: Organizations"
+    )
+    page.evaluate("applyLanguage('he')")
+    assert page.inner_text("#supabase-error") == (
+        "לטוקן שלכם חסרה הרשאה נדרשת. בדקו את ההרשאות המפורטות למעלה ונסו שוב. "
+        "Missing required scope: Organizations"
+    )
+
+
 def test_restore_from_session_resumes_polling_for_a_supabase_project_without_a_connection_string(
     page, live_app_url
 ):

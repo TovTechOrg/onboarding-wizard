@@ -335,6 +335,29 @@ async def test_validate_supabase_key_reports_invalid_key(monkeypatch):
     assert fake.read_frame(session_id, "supabase") is None
 
 
+async def test_validate_supabase_key_relays_insufficient_permissions_message(monkeypatch):
+    fake = _use_fake_session_store(monkeypatch)
+    session_id = fake.create_session()
+
+    async def fake_validate(pat):
+        return supabase_client.SupabaseKeyInvalid(
+            reason="insufficient_permissions", message="Missing required scope: Organizations"
+        )
+
+    monkeypatch.setattr(supabase_client, "validate_key", fake_validate)
+    client = await _client()
+    resp = await client.post(
+        "/api/supabase/validate-key",
+        json={"key": "sbp_fc_bad"},
+        cookies={"onboarding_session": session_id},
+    )
+    assert resp.json() == {
+        "valid": False,
+        "reason": "insufficient_permissions",
+        "message": "Missing required scope: Organizations",
+    }
+
+
 async def test_supabase_connect_endpoint_is_gone():
     client = await _client()
     resp = await client.post("/api/supabase/connect", json={"name": "x"})
@@ -406,6 +429,35 @@ async def test_create_project_relays_the_rejection_message(monkeypatch):
     }
 
 
+async def test_create_project_relays_insufficient_permissions_message(monkeypatch):
+    """Symmetric with validate-key/project-status/connection-info: a
+    message-bearing SupabaseApiFailed must still reach the response, even
+    though create-project's own 403 handling normally routes a message
+    through SupabaseProjectRejected instead (see supabase_client.py's
+    create_project docstring on the 403 ambiguity)."""
+    fake = _use_fake_session_store(monkeypatch)
+    session_id = fake.create_session()
+    fake.update_frame(session_id, "supabase", {"api_key": "a"})
+
+    async def fake_create(access_token, organization_slug, name, db_pass):
+        return supabase_client.SupabaseApiFailed(
+            reason="insufficient_permissions", message="Missing Organization Projects: Read-write"
+        )
+
+    monkeypatch.setattr(supabase_client, "create_project", fake_create)
+    client = await _client()
+    resp = await client.post(
+        "/api/supabase/create-project",
+        json={"organization_slug": "org-one", "name": "n"},
+        cookies={"onboarding_session": session_id},
+    )
+    assert resp.json() == {
+        "valid": False,
+        "reason": "insufficient_permissions",
+        "message": "Missing Organization Projects: Read-write",
+    }
+
+
 async def test_create_project_with_no_session_fails_closed():
     client = await _client()
     resp = await client.post(
@@ -445,6 +497,28 @@ async def test_project_status_reports_failure_reason(monkeypatch):
         "/api/supabase/project-status", cookies={"onboarding_session": session_id}
     )
     assert resp.json() == {"valid": False, "reason": "unauthorized"}
+
+
+async def test_project_status_relays_insufficient_permissions_message(monkeypatch):
+    fake = _use_fake_session_store(monkeypatch)
+    session_id = fake.create_session()
+    fake.update_frame(session_id, "supabase", {"api_key": "a", "ref": "x" * 20})
+
+    async def fake_status(access_token, ref):
+        return supabase_client.SupabaseApiFailed(
+            reason="insufficient_permissions", message="Missing Organization Projects: Read"
+        )
+
+    monkeypatch.setattr(supabase_client, "get_project_status", fake_status)
+    client = await _client()
+    resp = await client.post(
+        "/api/supabase/project-status", cookies={"onboarding_session": session_id}
+    )
+    assert resp.json() == {
+        "valid": False,
+        "reason": "insufficient_permissions",
+        "message": "Missing Organization Projects: Read",
+    }
 
 
 async def test_project_status_with_no_session_fails_closed():
@@ -498,6 +572,30 @@ async def test_connection_info_reports_failure_reason(monkeypatch):
         "/api/supabase/connection-info", cookies={"onboarding_session": session_id}
     )
     assert resp.json() == {"valid": False, "reason": "pooler_config_unavailable"}
+
+
+async def test_connection_info_relays_insufficient_permissions_message(monkeypatch):
+    fake = _use_fake_session_store(monkeypatch)
+    session_id = fake.create_session()
+    fake.update_frame(
+        session_id, "supabase", {"api_key": "a", "ref": "x" * 20, "db_pass": "pw"}
+    )
+
+    async def fake_info(access_token, ref, session_id):
+        return supabase_client.SupabaseApiFailed(
+            reason="insufficient_permissions", message="Missing Connection Pooling: Read"
+        )
+
+    monkeypatch.setattr(supabase_client, "get_connection_info", fake_info)
+    client = await _client()
+    resp = await client.post(
+        "/api/supabase/connection-info", cookies={"onboarding_session": session_id}
+    )
+    assert resp.json() == {
+        "valid": False,
+        "reason": "insufficient_permissions",
+        "message": "Missing Connection Pooling: Read",
+    }
 
 
 async def test_connection_info_with_no_session_fails_closed():

@@ -700,6 +700,8 @@ async def validate_supabase_key(payload: SupabaseKeyRequest, request: Request) -
         if isinstance(write_result, session_store.SessionNotFound):
             return {"valid": False, "reason": "no_session"}
         return {"valid": True, "orgs": [{"slug": o.slug, "name": o.name} for o in result.orgs]}
+    if result.message:
+        return {"valid": False, "reason": result.reason, "message": result.message}
     return {"valid": False, "reason": result.reason}
 
 
@@ -734,6 +736,8 @@ async def create_supabase_project(payload: SupabaseCreateProjectRequest, request
         return {"valid": True, "ref": result.ref, "status": result.status, "name": payload.name}
     if isinstance(result, supabase_client.SupabaseProjectRejected):
         return {"valid": False, "reason": "project_creation_rejected", "message": result.message}
+    if result.message:
+        return {"valid": False, "reason": result.reason, "message": result.message}
     return {"valid": False, "reason": result.reason}
 
 
@@ -748,6 +752,8 @@ async def get_supabase_project_status(request: Request) -> dict:
     )
     if isinstance(result, supabase_client.SupabaseProjectStatus):
         return {"valid": True, "status": result.status}
+    if result.message:
+        return {"valid": False, "reason": result.reason, "message": result.message}
     return {"valid": False, "reason": result.reason}
 
 
@@ -770,6 +776,8 @@ async def get_supabase_connection_info(request: Request) -> dict:
         if isinstance(write_result, session_store.SessionNotFound):
             return {"valid": False, "reason": "no_session"}
         return {"valid": True}
+    if result.message:
+        return {"valid": False, "reason": result.reason, "message": result.message}
     return {"valid": False, "reason": result.reason}
 
 

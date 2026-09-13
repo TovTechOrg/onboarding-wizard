@@ -1286,7 +1286,7 @@
       frame2_check_installation_none: "No installation found yet — install the App first, then Validate again",
       frame2_check_webhook: "Webhook URL matches",
       account_prefix: "account: ",
-      frame3_instructions: "Paste a Supabase Personal Access Token (Account → Access Tokens → Generate new token). This lets the wizard create a new project on your own Supabase account.",
+      frame3_instructions: "Paste a Supabase Personal Access Token (Account → Access Tokens → Generate new token). If your account has access to Scoped tokens, prefer one — check these permissions when creating it: Organizations (Read), Organization Projects (Read-write), Connection Pooling (Read). A Classic token also works. This lets the wizard create a new project on your own Supabase account.",
       frame3_name_placeholder: "pr-review-bot",
       validate_supabase_key_button: "Validate",
       frame3_org_instructions: "Choose which Supabase organization to create the project in.",
@@ -1302,7 +1302,7 @@
       err_supabase_storage_failed: "Couldn't save your Supabase connection in this browser. Try again.",
       err_supabase_callback_invalid: "That didn't come back from Supabase as expected. Please try again.",
       err_supabase_reauthorize: "Your Supabase token was rejected. Reconnect with a valid Personal Access Token.",
-      err_supabase_forbidden: "Supabase rejected that action for your account.",
+      err_supabase_insufficient_permissions: "Your token is missing a required permission. Check the permissions listed above and try again.",
       err_supabase_rate_limited: "Too many requests to Supabase right now. Try again in a moment.",
       err_supabase_unreachable: "Supabase is unreachable right now. Try again in a moment.",
       err_supabase_no_organizations: "Your Supabase account has no organizations yet. Create one at supabase.com, then connect again.",
@@ -1447,7 +1447,7 @@
       frame2_check_installation_none: "לא נמצאה התקנה עדיין — התקינו את האפליקציה קודם, ואז בדקו שוב",
       frame2_check_webhook: "כתובת ה-Webhook תואמת",
       account_prefix: "חשבון: ",
-      frame3_instructions: "הדביקו Personal Access Token של Supabase:<ol><li>Account</li><li>Access Tokens</li><li>Generate new token</li></ol>זה מאפשר לאשף ליצור פרויקט חדש בחשבון ה-Supabase שלכם.",
+      frame3_instructions: "הדביקו Personal Access Token של Supabase:<ol><li>Account</li><li>Access Tokens</li><li>Generate new token</li></ol>אם לחשבון שלכם יש גישה לטוקנים מסוג Scoped, עדיף להשתמש בהם — בעת היצירה סמנו את ההרשאות הבאות:<ol><li>Organizations (Read)</li><li>Organization Projects (Read-write)</li><li>Connection Pooling (Read)</li></ol>גם טוקן מסוג Classic יעבוד. זה מאפשר לאשף ליצור פרויקט חדש בחשבון ה-Supabase שלכם.",
       frame3_name_placeholder: "pr-review-bot",
       validate_supabase_key_button: "אימות",
       frame3_org_instructions: "בחרו לאיזה ארגון ב-Supabase ליצור את הפרויקט.",
@@ -1463,7 +1463,7 @@
       err_supabase_storage_failed: "לא ניתן לשמור את חיבור ה-Supabase בדפדפן זה. נסו שוב.",
       err_supabase_callback_invalid: "התגובה מ-Supabase לא הייתה כצפוי. נסו שוב.",
       err_supabase_reauthorize: "הטוקן שלכם ל-Supabase נדחה. התחברו מחדש עם Personal Access Token תקף.",
-      err_supabase_forbidden: "Supabase דחה את הפעולה עבור החשבון שלכם.",
+      err_supabase_insufficient_permissions: "לטוקן שלכם חסרה הרשאה נדרשת. בדקו את ההרשאות המפורטות למעלה ונסו שוב.",
       err_supabase_rate_limited: "יותר מדי בקשות ל-Supabase כרגע. נסו שוב בעוד רגע.",
       err_supabase_unreachable: "Supabase אינו זמין כרגע. נסו שוב בעוד רגע.",
       err_supabase_no_organizations: "לחשבון ה-Supabase שלכם אין עדיין ארגונים. צרו ארגון באתר supabase.com ואז התחברו שוב.",
@@ -1650,7 +1650,9 @@
       renderGithubAppChecklist(lastGithubAppChecklistBody);
     }
     if (currentSupabaseErrorKey) {
-      document.getElementById("supabase-error").textContent = t(currentSupabaseErrorKey);
+      document.getElementById("supabase-error").textContent =
+        t(currentSupabaseErrorKey) +
+        (currentSupabaseErrorMessage ? " " + currentSupabaseErrorMessage : "");
     }
     if (currentLlmProviderErrorKey) {
       document.getElementById("llm-provider-error").textContent = t(currentLlmProviderErrorKey);
@@ -1734,6 +1736,13 @@
   // is cleared (a fresh validate attempt, or "Change").
   let lastGithubAppChecklistBody = null;
   let currentSupabaseErrorKey = null;
+  // Only ever set alongside currentSupabaseErrorKey for the
+  // insufficient_permissions case -- Supabase's own relayed text, appended
+  // after the (re-translatable) fixed copy that currentSupabaseErrorKey
+  // points at. null for every other case, including project_creation_rejected
+  // (whose whole displayed string is Supabase's text, tracked via a null key
+  // instead -- see supabaseErrorForReason).
+  let currentSupabaseErrorMessage = null;
   let currentDashboardAuthErrorKey = null;
   let dashboardAuthPasswordVisible = false;
 
@@ -3167,11 +3176,13 @@
     document.getElementById("supabase-key-submit").disabled = false;
     document.getElementById("supabase-org-submit").disabled = false;
     currentSupabaseErrorKey = null;
+    currentSupabaseErrorMessage = null;
   }
 
   function supabaseError(key) {
     setFrameStatus("supabase", "error");
     currentSupabaseErrorKey = key;
+    currentSupabaseErrorMessage = null;
     document.getElementById("supabase-error").textContent = t(key);
   }
 
@@ -3185,9 +3196,25 @@
       // re-enter their access token for no reason.
       setFrameStatus("supabase", "error");
       currentSupabaseErrorKey = null;
+      currentSupabaseErrorMessage = null;
       // Supabase's own error text, relayed verbatim (spec section 4) —
       // not a translated string, since it isn't one of ours.
       document.getElementById("supabase-error").textContent = message;
+      return;
+    }
+    if (reason === "insufficient_permissions") {
+      // A scoped token that validated but is missing a permission (or a
+      // later action a permission-limited token can't perform) — our own
+      // fixed copy plus Supabase's relayed message when it provides one.
+      // Unlike project_creation_rejected above, the fixed-copy half of this
+      // string IS ours and must re-translate on a language switch, so the
+      // key stays set (currentSupabaseErrorMessage carries the untranslated
+      // remainder) rather than going to null.
+      setFrameStatus("supabase", "error");
+      currentSupabaseErrorKey = "err_supabase_insufficient_permissions";
+      currentSupabaseErrorMessage = message || null;
+      document.getElementById("supabase-error").textContent =
+        t("err_supabase_insufficient_permissions") + (message ? " " + message : "");
       return;
     }
     // "unauthorized" means the server's stored access_token is dead
@@ -3201,7 +3228,6 @@
     const key = {
       unauthorized: "err_supabase_reauthorize",
       no_session: "err_no_session",
-      forbidden: "err_supabase_forbidden",
       rate_limited: "err_supabase_rate_limited",
       pooler_config_unavailable: "err_supabase_pooler_config_unavailable",
     }[reason] || "err_supabase_unreachable";
@@ -3239,6 +3265,7 @@
     const key = input.value.trim();
     document.getElementById("supabase-error").textContent = "";
     currentSupabaseErrorKey = null;
+    currentSupabaseErrorMessage = null;
     if (!key) {
       supabaseError("err_supabase_empty_key");
       return;
@@ -3267,7 +3294,7 @@
       if (body.reason === "invalid_key") {
         supabaseError("err_supabase_invalid_key");
       } else {
-        supabaseErrorForReason(body.reason);
+        supabaseErrorForReason(body.reason, body.message);
       }
       return;
     }
@@ -3305,6 +3332,7 @@
     const name = nameInput.value.trim();
     document.getElementById("supabase-error").textContent = "";
     currentSupabaseErrorKey = null;
+    currentSupabaseErrorMessage = null;
     if (!name) {
       supabaseError("err_supabase_name_empty");
       return;
@@ -3410,6 +3438,7 @@
     if (!stored || !stored.ref) return;
     document.getElementById("supabase-error").textContent = "";
     currentSupabaseErrorKey = null;
+    currentSupabaseErrorMessage = null;
     const checkAgainBtn = document.getElementById("supabase-check-status-submit");
     checkAgainBtn.disabled = true;
     const generation = supabasePollGeneration;

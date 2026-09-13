@@ -477,9 +477,24 @@ async def test_frame3_strings_present_in_both_languages():
         "err_supabase_empty_key",
         "err_supabase_invalid_key",
         "err_supabase_callback_invalid",
+        "err_supabase_insufficient_permissions",
     ):
         assert f"{key}:" in body
     assert body.count("validate_supabase_key_button:") == 2  # STRINGS.en + STRINGS.he
+
+
+async def test_frame3_instructions_recommend_a_scoped_token_with_named_permissions():
+    """Scoped tokens are Supabase's own recommended choice for automation,
+    but are in gradual/alpha rollout -- not every account can create one --
+    so the wizard still accepts a Classic token (no server-side gate) and
+    only recommends Scoped, naming the exact permissions to grant so a
+    later insufficient_permissions failure is diagnosable."""
+    client = await _client()
+    body = (await client.get("/")).text
+    assert "Scoped" in body
+    assert "Organizations" in body
+    assert "Organization Projects" in body
+    assert "Connection Pooling" in body
 
 
 async def test_reactive_refresh_helper_present():

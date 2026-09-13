@@ -16,7 +16,7 @@ import supabase_client
 
 ORGS_URL = "https://api.supabase.com/v1/organizations"
 PROJECTS_URL = "https://api.supabase.com/v1/projects"
-SENTINEL_PAT = "sbp_SENTINEL_DO_NOT_LOG_9f3a"
+SENTINEL_PAT = "sbp_fc_SENTINEL_DO_NOT_LOG_9f3a"
 
 
 async def test_valid_key_returns_orgs():
@@ -56,15 +56,51 @@ async def test_validate_key_sends_bearer_token():
 async def test_unauthorized_key_is_invalid():
     with respx.mock:
         respx.get(ORGS_URL).mock(return_value=httpx.Response(401))
-        result = await supabase_client.validate_key("bad")
+        result = await supabase_client.validate_key("sbp_fc_bad")
     assert result == supabase_client.SupabaseKeyInvalid(reason="invalid_key")
 
 
-async def test_forbidden_key_is_invalid():
+async def test_classic_token_still_reaches_the_network_and_can_validate():
+    """Scoped PATs are Supabase's own recommended choice for automation, but
+    are in gradual/alpha rollout (not every account has the option to
+    create one yet -- see CLAUDE.md's sub-project 3 section), so a Classic
+    token (no `sbp_fc` prefix) must still be accepted rather than hard
+    -rejected. There is no prefix gate at all -- any token that Supabase's
+    own API accepts is valid here."""
+    with respx.mock:
+        respx.get(ORGS_URL).mock(
+            return_value=httpx.Response(
+                200, json=[{"id": "1", "slug": "org-one", "name": "Org One"}]
+            )
+        )
+        result = await supabase_client.validate_key("sbp_classic_token_no_fc")
+    assert result == supabase_client.SupabaseKeyValid(
+        orgs=[supabase_client.SupabaseOrg(slug="org-one", name="Org One")]
+    )
+
+
+async def test_forbidden_key_reports_insufficient_permissions():
+    """A scoped token's 403 means "valid token, missing permission" --
+    genuinely different from a 401 (dead/revoked token) and must not be
+    folded into the same "invalid_key" reason."""
     with respx.mock:
         respx.get(ORGS_URL).mock(return_value=httpx.Response(403))
-        result = await supabase_client.validate_key("bad")
-    assert result == supabase_client.SupabaseKeyInvalid(reason="invalid_key")
+        result = await supabase_client.validate_key(SENTINEL_PAT)
+    assert result == supabase_client.SupabaseKeyInvalid(reason="insufficient_permissions")
+
+
+async def test_forbidden_key_relays_supabases_message():
+    with respx.mock:
+        respx.get(ORGS_URL).mock(
+            return_value=httpx.Response(
+                403, json={"message": "Missing required scope: Organizations"}
+            )
+        )
+        result = await supabase_client.validate_key(SENTINEL_PAT)
+    assert result == supabase_client.SupabaseKeyInvalid(
+        reason="insufficient_permissions",
+        message="Missing required scope: Organizations",
+    )
 
 
 async def test_5xx_is_unreachable_not_invalid():
@@ -172,9 +208,24 @@ async def test_create_project_business_rule_rejection_relays_the_message():
     )
 
 
-async def test_create_project_rejection_without_a_message_falls_back_to_unreachable():
+async def test_create_project_403_without_a_message_reports_insufficient_permissions():
+    """A 403 with no relayable message is still a 403 -- most likely a scoped
+    token missing Organization Projects: Read-write, not a "Supabase is
+    unreachable" case (which used to be the fallback here and told the
+    visitor to do the one thing -- wait and retry -- that can never fix a
+    missing permission)."""
     with respx.mock:
         respx.post(PROJECTS_URL).mock(return_value=httpx.Response(403, text="not json"))
+        result = await supabase_client.create_project("a", "org-one", "name", "pw")
+    assert result == supabase_client.SupabaseApiFailed(reason="insufficient_permissions")
+
+
+async def test_create_project_non_403_4xx_without_a_message_falls_back_to_unreachable():
+    """Unlike a 403, a plain 400/422 has no permission-shaped meaning --
+    keeps the old degrade-to-unreachable fallback when there's truly nothing
+    to relay."""
+    with respx.mock:
+        respx.post(PROJECTS_URL).mock(return_value=httpx.Response(400, text="not json"))
         result = await supabase_client.create_project("a", "org-one", "name", "pw")
     assert result == supabase_client.SupabaseApiFailed(reason="supabase_unreachable")
 
@@ -186,14 +237,14 @@ async def test_create_project_unreachable_on_5xx():
     assert result == supabase_client.SupabaseApiFailed(reason="supabase_unreachable")
 
 
-async def test_create_project_4xx_with_non_dict_json_falls_back_to_unreachable():
-    """If a 4xx error body is valid JSON but not a dict (e.g., array or scalar),
-    .get("message") raises AttributeError, which must be caught and degrade to
-    unreachable, not propagate uncaught."""
+async def test_create_project_403_with_non_dict_json_reports_insufficient_permissions():
+    """If a 403's body is valid JSON but not a dict (e.g., array or scalar),
+    .get("message") raises AttributeError, which must be caught and degrade
+    to insufficient_permissions (no message), not propagate uncaught."""
     with respx.mock:
         respx.post(PROJECTS_URL).mock(return_value=httpx.Response(403, json=[1, 2, 3]))
         result = await supabase_client.create_project("a", "org-one", "name", "pw")
-    assert result == supabase_client.SupabaseApiFailed(reason="supabase_unreachable")
+    assert result == supabase_client.SupabaseApiFailed(reason="insufficient_permissions")
 
 
 PROJECT_STATUS_URL = "https://api.supabase.com/v1/projects/abcdefghijklmnopqrst"
@@ -252,6 +303,19 @@ async def test_get_project_status_unreachable_on_5xx():
         respx.get(PROJECT_STATUS_URL).mock(return_value=httpx.Response(500))
         result = await supabase_client.get_project_status("a", "abcdefghijklmnopqrst")
     assert result == supabase_client.SupabaseApiFailed(reason="supabase_unreachable")
+
+
+async def test_get_project_status_forbidden_reports_insufficient_permissions():
+    with respx.mock:
+        respx.get(PROJECT_STATUS_URL).mock(
+            return_value=httpx.Response(
+                403, json={"message": "Missing Organization Projects: Read"}
+            )
+        )
+        result = await supabase_client.get_project_status("a", "abcdefghijklmnopqrst")
+    assert result == supabase_client.SupabaseApiFailed(
+        reason="insufficient_permissions", message="Missing Organization Projects: Read"
+    )
 
 
 async def test_get_project_status_malformed_body_is_unreachable():
@@ -345,6 +409,19 @@ async def test_get_connection_info_unreachable_on_5xx():
             "a", "abcdefghijklmnopqrst", session_id="s1"
         )
     assert result == supabase_client.SupabaseApiFailed(reason="supabase_unreachable")
+
+
+async def test_get_connection_info_forbidden_reports_insufficient_permissions():
+    with respx.mock:
+        respx.get(POOLER_URL).mock(
+            return_value=httpx.Response(403, json={"message": "Missing Connection Pooling: Read"})
+        )
+        result = await supabase_client.get_connection_info(
+            "a", "abcdefghijklmnopqrst", session_id="s1"
+        )
+    assert result == supabase_client.SupabaseApiFailed(
+        reason="insufficient_permissions", message="Missing Connection Pooling: Read"
+    )
 
 
 async def test_get_connection_info_malformed_entries_with_scalars_is_pooler_config_unavailable():

@@ -604,6 +604,59 @@ not in prose about who calls you.
   client-facing refresh path (there never was one exposed to the
   browser even under OAuth) and nothing to refresh: a PAT doesn't expire
   the way an OAuth access token does.
+- **Both Classic and Scoped Personal Access Tokens are accepted
+  (2026-09-13) — no server-side gate on token shape.** Supabase's own docs
+  recommend scoped tokens "especially [for] AI agents, automation
+  scripts, and CI environments" (exactly this wizard's use case), so the
+  visitor-facing instructions *prefer* one and name the permissions to
+  grant. A hard `sbp_fc`-prefix-only gate was built and then deliberately
+  reverted the same day, once verified against Supabase's own docs:
+  **scoped tokens are "in public alpha and rolling out gradually"** — an
+  account without early access doesn't even get the option to create one,
+  which would have made the gate an unactionable dead end for those
+  visitors ("create a Scoped token instead" with no way to do so). Classic
+  tokens are functionally identical for every call this wizard makes (same
+  bearer-auth header, same endpoints, same response shapes) except that
+  they can never produce a permission-shaped 403, so accepting both is
+  free — `supabase_client.validate_key` makes no distinction at all.
+- **A scoped token's 403 means "valid token, missing permission" — a
+  reason distinct from 401's "invalid/revoked token", not folded
+  together.** `supabase_client.py`'s `validate_key`, `get_project_status`,
+  and `get_connection_info` all map 403 to `"insufficient_permissions"`
+  (renamed from the old undifferentiated `"forbidden"`) and relay
+  Supabase's own `message` field when the body provides one (best-effort;
+  no guaranteed structured error body), so the frontend can show the
+  visitor which permission to add rather than a generic "access denied".
+  `create_project`'s 403-with-a-message still goes through the existing
+  `SupabaseProjectRejected` message-relay path unchanged, since a 403
+  there is ambiguous between a missing permission and a business-rule
+  rejection (e.g. the free-tier project cap) and both already get the
+  same "show Supabase's own text" treatment; a 403 with *no* relayable
+  message, though, still reports `"insufficient_permissions"` rather than
+  degrading to `"supabase_unreachable"` (a bug caught in review — the old
+  fallback told the visitor to do the one thing, wait and retry, that
+  can never fix a missing permission).
+- **The frontend's `insufficient_permissions` display combines our own
+  translated copy with Supabase's relayed message** — unlike
+  `project_creation_rejected` (100% Supabase's own untranslatable text,
+  tracked via a null `currentSupabaseErrorKey`), this case's fixed-copy
+  half must still re-render on a language switch. `currentSupabaseErrorKey`
+  stays set to the real key and a sibling `currentSupabaseErrorMessage`
+  carries the untranslated remainder; `applyLanguage()` recombines both.
+  A bug where this case nulled the key (breaking re-translation on
+  EN↔HE toggle) was caught by a real-browser Playwright test, not the
+  source-substring convention every other page test uses — that
+  convention cannot exercise a language-switch re-render at all.
+- **The visitor-facing instructions name the exact permissions to grant**
+  if creating a scoped token: Organizations (Read), Organization
+  Projects (Read-write), Connection Pooling (Read) — matching
+  `validate_key`'s org listing, `create_project`/`get_project_status`'s
+  project calls, and `get_connection_info`'s pooler-config read,
+  respectively. These are Supabase's current dashboard permission-category
+  labels (as of 2026-09-13) and could drift if Supabase reorganizes that
+  UI — there is no API-level way to verify a token's granted permissions
+  ahead of a call that needs them, so this is instructional copy, not a
+  server-side check.
 
 ## What sub-project 4 (LLM provider credential UI) adds to these rules
 

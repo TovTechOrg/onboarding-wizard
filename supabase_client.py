@@ -17,6 +17,17 @@ SUPABASE_API_BASE = "https://api.supabase.com/v1"
 SUPABASE_REGION_CODE = "us-east-1"
 
 
+def _extract_message(response: httpx.Response) -> str | None:
+    """Best-effort parse of a 4xx body's `message` field -- there is no
+    guaranteed structured error body (spec section 4), so this degrades to
+    None rather than raising on an unexpected shape."""
+    try:
+        message = response.json().get("message")
+    except (ValueError, AttributeError):
+        return None
+    return str(message) if message else None
+
+
 @dataclasses.dataclass(frozen=True)
 class SupabaseOrg:
     slug: str
@@ -30,7 +41,9 @@ class SupabaseKeyValid:
 
 @dataclasses.dataclass(frozen=True)
 class SupabaseKeyInvalid:
-    reason: str  # "invalid_key" | "supabase_unreachable"
+    # "invalid_key" | "insufficient_permissions" | "supabase_unreachable"
+    reason: str
+    message: str | None = None
 
 
 SupabaseKeyValidation = SupabaseKeyValid | SupabaseKeyInvalid
@@ -41,7 +54,13 @@ async def validate_key(pat: str) -> SupabaseKeyValidation:
     Supabase Personal Access Token -- doubles as both validation and the
     org list the frame needs next (Supabase has no separate token-identity
     endpoint). Never logs or returns the token itself. Mirrors
-    render_client.validate_key()'s shape exactly."""
+    render_client.validate_key()'s shape exactly.
+
+    Accepts both Classic and Scoped Personal Access Tokens -- Supabase's
+    scoped/fine-grained tokens are its own recommended choice for
+    automation, but are in gradual/alpha rollout (not every account has the
+    option to create one yet), so this never gates on token shape; see
+    CLAUDE.md's sub-project 3 section."""
     try:
         async with httpx.AsyncClient(base_url=SUPABASE_API_BASE, timeout=15.0) as client:
             response = await client.get(
@@ -51,8 +70,15 @@ async def validate_key(pat: str) -> SupabaseKeyValidation:
     except httpx.HTTPError:
         return SupabaseKeyInvalid(reason="supabase_unreachable")
 
-    if response.status_code in (401, 403):
+    if response.status_code == 401:
         return SupabaseKeyInvalid(reason="invalid_key")
+    if response.status_code == 403:
+        # A scoped token's 403 means "valid token, missing permission" --
+        # distinct from a 401 (dead/revoked token). Relay whatever message
+        # Supabase provides so the visitor can tell which permission to add.
+        return SupabaseKeyInvalid(
+            reason="insufficient_permissions", message=_extract_message(response)
+        )
     if response.status_code != 200:
         return SupabaseKeyInvalid(reason="supabase_unreachable")
 
@@ -66,9 +92,11 @@ async def validate_key(pat: str) -> SupabaseKeyValidation:
 
 @dataclasses.dataclass(frozen=True)
 class SupabaseApiFailed:
+    # "unauthorized" | "insufficient_permissions" | "rate_limited"
+    # | "supabase_unreachable" | "pooler_config_unavailable"
+    # | "pooler_not_ready" (connection-info only)
     reason: str
-    # "unauthorized" | "forbidden" | "rate_limited" | "supabase_unreachable"
-    # | "pooler_config_unavailable" | "pooler_not_ready" (connection-info only)
+    message: str | None = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -113,15 +141,22 @@ async def create_project(
     if response.status_code >= 500:
         return SupabaseApiFailed(reason="supabase_unreachable")
     if response.status_code >= 400:
-        # No guaranteed structured error body (spec section 4) — relay
-        # Supabase's own message verbatim rather than guessing which
-        # business rule (free-tier cap or otherwise) was violated.
-        try:
-            message = response.json().get("message")
-        except (ValueError, AttributeError):
-            message = None
+        # A 4xx here is ambiguous between a business-rule rejection (e.g.
+        # the free-tier project cap) and a scoped token missing a required
+        # permission — both surface as the same status code with no
+        # guaranteed structured body (spec section 4), so this relays
+        # Supabase's own message verbatim rather than guessing which one it
+        # was; the visitor sees the same text either way.
+        message = _extract_message(response)
         if message:
-            return SupabaseProjectRejected(message=str(message))
+            return SupabaseProjectRejected(message=message)
+        if response.status_code == 403:
+            # No message to relay, but a 403 specifically is still much more
+            # likely a missing permission (e.g. Organization Projects:
+            # Read-write) than a transient outage -- degrading this to
+            # "Supabase is unreachable, try again" would tell the visitor to
+            # do the one thing that can never fix a missing permission.
+            return SupabaseApiFailed(reason="insufficient_permissions")
         return SupabaseApiFailed(reason="supabase_unreachable")
     if response.status_code != 201:
         return SupabaseApiFailed(reason="supabase_unreachable")
@@ -158,7 +193,9 @@ async def get_project_status(
     if response.status_code == 401:
         return SupabaseApiFailed(reason="unauthorized")
     if response.status_code == 403:
-        return SupabaseApiFailed(reason="forbidden")
+        return SupabaseApiFailed(
+            reason="insufficient_permissions", message=_extract_message(response)
+        )
     if response.status_code == 429:
         return SupabaseApiFailed(reason="rate_limited")
     if response.status_code != 200:
@@ -224,7 +261,9 @@ async def get_connection_info(
     if response.status_code == 401:
         return SupabaseApiFailed(reason="unauthorized")
     if response.status_code == 403:
-        return SupabaseApiFailed(reason="forbidden")
+        return SupabaseApiFailed(
+            reason="insufficient_permissions", message=_extract_message(response)
+        )
     if response.status_code == 429:
         return SupabaseApiFailed(reason="rate_limited")
     if response.status_code != 200:
