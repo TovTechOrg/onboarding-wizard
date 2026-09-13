@@ -142,12 +142,22 @@ for the full design.
   their own copy of `check_env_access.py`, `redact_output.py` and
   `check_exfiltration.py`. Neither repo's CI can see the other, so nothing
   mechanical catches drift -- and `check_env_access.py` already drifted once,
-  silently, leaving the wizard on the superseded pipe-based wrapper. Changing
-  a hook in one repo means porting it to the other **in the same session**,
-  verified with `diff <repo-a>/.claude/hooks/<file> <repo-b>/.claude/hooks/<file>`
+  silently, leaving the wizard on the superseded pipe-based wrapper (fixed
+  2026-09-13 -- see the "silently drifted" incident entry in `ISSUES.md`).
+  Changing a hook in one repo means porting it to the other **in the same
+  session**, verified with
+  `diff <repo-a>/.claude/hooks/<file> <repo-b>/.claude/hooks/<file>`
   printing nothing, before either change is considered done. Per-repo
   differences belong in `check_exfiltration.py`'s `_PROTECTED` list, which was
-  designed wide enough that nothing else should need one.
+  designed wide enough that nothing else should need one. **One documented
+  exception:** `check_env_access.py`'s `_SINK_DIR` constant deliberately
+  differs by exactly one literal (`onboarding-wizard-redact` here vs.
+  `pr-review-bot-redact` there) -- each repo's redaction sink must be named
+  after its own project so the two never collide on a shared machine. A
+  `diff` between the two copies is expected to show only the two hunks that
+  single-line difference implies (the sink-name assignment itself and its
+  neighboring comment/docstring mentions); anything beyond that is real
+  drift.
 
 ## Docker image: no `chown -R` (2026-09-07)
 
@@ -1155,9 +1165,10 @@ SDD-shaped, where the commit boundary arrives once per task rather than once
 per branch. If there is reason to think harness behaviour has changed, the
 probe is two commands -- `git worktree add <tmp> -b probe/x`, then `cd <tmp> &&
 git status --short`. If that runs, this guidance still holds. This repo's
-`check_env_access.py` still carries the superseded pipe-based wrapper, so the
-failure here is worse than in the review engine: **every** Bash command in
-such a session is refused, not only those naming git.
+`check_env_access.py` was ported to the sibling repo's file-fed rewrite on
+2026-09-13 (see `ISSUES.md`), so the failure mode here now matches the review
+engine's rather than being strictly worse: only commands naming `git` are
+refused inside an `EnterWorktree` session, not every Bash command.
 
 ### Worktree caveats
 
