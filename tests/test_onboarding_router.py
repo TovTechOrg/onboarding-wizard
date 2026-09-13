@@ -2508,8 +2508,12 @@ async def test_a_malformed_project_is_refused(monkeypatch):
     assert resp.json() == {"valid": False, "reason": "invalid_vertex_project"}
 
 
-async def test_a_failed_projects_listing_fails_the_whole_call(monkeypatch):
-    """The frame cannot offer a project dropdown it could not populate."""
+async def test_a_failed_projects_listing_falls_back_to_the_keys_own_project(monkeypatch):
+    """Mirrors pr-review-bot's dashboard/environment.py::_validate_vertex_credential:
+    a projects:search failure (e.g. Cloud Resource Manager not enabled, or the
+    account lacking resourcemanager.projects.get) must not block validation --
+    the key's own project, already confirmed usable by the list_vertex_models
+    call above, is still offered as the one dropdown option."""
     async def fake_list_models(b64, project=None, location=None):
         return llm_client.VertexModelsListed(project_id="test-project", models=["m1"])
 
@@ -2520,4 +2524,11 @@ async def test_a_failed_projects_listing_fails_the_whole_call(monkeypatch):
     monkeypatch.setattr(llm_client, "list_accessible_projects", fake_list_projects)
     client = await _client()
     resp = await client.post("/api/llm/vertex/list-models", json={"service_account_key_b64": "k"})
-    assert resp.json() == {"valid": False, "reason": "vertex_projects_unavailable"}
+    assert resp.json() == {
+        "valid": True,
+        "project_id": "test-project",
+        "models": ["m1"],
+        "projects": ["test-project"],
+        "default_project": "test-project",
+        "default_location": router._VERTEX_DEFAULT_LOCATION,
+    }

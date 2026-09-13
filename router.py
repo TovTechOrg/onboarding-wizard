@@ -827,10 +827,20 @@ async def list_vertex_models(payload: LlmVertexListModelsRequest) -> dict:
         return {"valid": False, "reason": result.reason}
     response = {"valid": True, "project_id": result.project_id, "models": result.models}
     if both_absent:
+        # Mirrors pr-review-bot's dashboard/environment.py::
+        # _validate_vertex_credential: a projects:search failure (Cloud
+        # Resource Manager disabled, or the account lacking
+        # resourcemanager.projects.get -- both common for a service account
+        # scoped narrowly to Vertex) never blocks validation. The key's own
+        # project is already confirmed usable by the list_vertex_models call
+        # above, so it's always a real dropdown option even when the
+        # broader project listing fails outright.
         projects = await llm_client.list_accessible_projects(payload.service_account_key_b64)
-        if not isinstance(projects, llm_client.VertexProjectsListed):
-            return {"valid": False, "reason": projects.reason}
-        response["projects"] = projects.projects
+        response["projects"] = (
+            projects.projects
+            if isinstance(projects, llm_client.VertexProjectsListed)
+            else [result.project_id]
+        )
         response["default_project"] = result.project_id
         response["default_location"] = _VERTEX_DEFAULT_LOCATION
     return response

@@ -42,7 +42,7 @@ to the visitor.
 | D1 | Probe point | The frame's **Continue** submit (`POST /api/llm/confirm`), one live call per deliberate choice — not per dropdown change |
 | D2 | Finish & Deploy probe | **Kept unchanged** as the correctness gate; the new probe is UX |
 | D3 | Location options source | **Extend the bot's contract** (`vertex_locations` block, `contract_version` 2 → 3), vendored here — never a hand-copied list |
-| D4 | `projects:search` failure | **Surface as a frame error**, mirroring the bot — not a silent degrade to the key's home project |
+| D4 | `projects:search` failure | ~~Surface as a frame error, mirroring the bot — not a silent degrade to the key's home project~~ **Reversed 2026-09-13** (see correction below): the bot does not do this — silently degrade to the key's home project, actually mirroring the bot |
 | D5 | Location dropdown order | **The contract's curated order**, preserved verbatim — deliberately not sorted |
 | D6 | Project dropdown order | Alphabetical, mirroring the model dropdown |
 
@@ -51,6 +51,26 @@ geography with `global` last; sorting it alphabetically would scatter `global`
 between `europe-*` and `northamerica-*` and bury `us-central1`. A project list
 carries no such authored meaning, so it sorts by name like every other
 dynamically populated dropdown on the page.
+
+**Correction (2026-09-13):** D4's premise was checked against
+`pr-review-bot/dashboard/environment.py::_validate_vertex_credential` and found
+wrong. That function calls `catalog.list_accessible_projects(info)` and uses
+`projects_result.models or []` without ever checking `projects_result.ok` --
+a `projects:search` failure (Cloud Resource Manager disabled, or the account
+lacking `resourcemanager.projects.get`, both common for a service account
+scoped narrowly to Vertex rather than given broad IAM) never affects the
+response's own `ok`/`error`, which come solely from the separate
+`list_vertex_models` call. The bot silently degrades to offering just the
+key's own project; it does not surface an error for this failure at all. D4 as
+written did the opposite of what it claimed to do. Reversed in `router.py`'s
+`list_vertex_models` endpoint: a `list_accessible_projects` failure on the
+first-validate path now falls back to `[result.project_id]` instead of
+failing the whole call, actually matching the bot this time.
+`err_llm_vertex_projects_unavailable` (and its `vertex_projects_unavailable`
+reason mapping) is now dead in `static/index.html` and was removed --
+`llm_client.list_accessible_projects` still returns
+`LlmApiFailed(reason="vertex_projects_unavailable")` internally, but nothing
+propagates it to the browser anymore.
 
 ## 3. Security: a location is a hostname
 
