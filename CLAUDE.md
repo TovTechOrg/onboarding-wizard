@@ -657,6 +657,33 @@ not in prose about who calls you.
   UI — there is no API-level way to verify a token's granted permissions
   ahead of a call that needs them, so this is instructional copy, not a
   server-side check.
+- **A failure during status polling or connection-info must always leave a
+  retry path visible, never a silent dead end (2026-09-14 fix).** Reported
+  live: a token that passed `validate_key` (has `Organizations: Read`) and
+  `create_project` (has `Organization Projects: Read-write`) but lacks the
+  permission `get_project_status` or `get_connection_info` needs left the
+  visitor stuck on the provisioning section reading an error with no
+  button at all — the project had genuinely already been created in
+  Supabase by this point. Two distinct bugs combined to cause this:
+  `pollUntilReady`/`checkSupabaseStatusOnce` only ever revealed the
+  "Check again" button on the pending-timeout path, never on an outright
+  failure (`handleProjectStatusResult` returning `"error"`); and
+  `handleProjectStatusResult` unconditionally returned `"ready"` once
+  status was `ACTIVE_HEALTHY`, regardless of whether the
+  `fetchSupabaseConnectionInfo()` call it awaits inside that branch
+  actually succeeded — so a connection-info failure stopped polling
+  entirely with no error path taken at all. Both are fixed:
+  `fetchSupabaseConnectionInfo()` now returns a boolean the caller must
+  check, and any `"error"` outcome (not just `"pending"`-timeout) reveals
+  "Check again" and stops automatic polling in favor of a manual retry —
+  deliberately *not* a reset back to the key-input section, since the
+  project already exists and the fix is adding a permission to the *same*
+  token in Supabase's dashboard, not pasting a new one (which would also
+  risk orphaning this project's `ref`/`db_pass` via `validate-key`'s
+  `replace=True`). Caught with real-browser Playwright tests that mock
+  the two failure points and drive an actual retry click through to
+  `completeFrame` — the source-substring convention every other page test
+  uses cannot exercise this kind of multi-step async state transition.
 
 ## What sub-project 4 (LLM provider credential UI) adds to these rules
 

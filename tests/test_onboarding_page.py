@@ -664,7 +664,7 @@ async def test_connection_info_missing_local_state_shows_an_error_not_a_silent_s
     fn_start = body.index("async function fetchSupabaseConnectionInfo")
     fn_body = body[fn_start : body.index("function restoreFromSession")]
     guard_body = fn_body[: fn_body.index("const body = await callSupabaseRelay(")]
-    assert "return;" in guard_body
+    assert "return false;" in guard_body
     assert 'supabaseError("err_supabase_callback_invalid");' in guard_body
 
 

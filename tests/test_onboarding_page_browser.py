@@ -134,6 +134,129 @@ def test_restore_from_session_resumes_polling_for_a_supabase_project_without_a_c
     assert not page.is_visible("#supabase-org-section")
 
 
+def test_project_status_insufficient_permissions_offers_a_retry_not_a_dead_end(
+    page, live_app_url
+):
+    """Bug report: create-project already succeeded (the project genuinely
+    exists in Supabase), but the same token lacks the permission
+    project-status polling needs -- before this fix, handleProjectStatusResult
+    reported the error but pollUntilReady only ever showed the "Check again"
+    button on its own pending-timeout path, so an outright failure left the
+    visitor stuck reading an error with no available action at all. The
+    fix: any failure outcome (not just a pending timeout) reveals "Check
+    again" so the visitor can retry once they've added the missing
+    permission to the SAME token in Supabase's dashboard -- no need to
+    re-paste a credential, which would risk orphaning the already-created
+    project's ref/db_pass."""
+    session_body = {
+        "frames": {
+            "supabase": {
+                "complete": False,
+                "provisioning": True,
+                "display": {"ref": "abcdefghijklmnopqrst", "name": "Test Project"},
+            }
+        }
+    }
+    status_response = {
+        "valid": False,
+        "reason": "insufficient_permissions",
+        "message": "Missing Organization Projects: Read",
+    }
+
+    def handle_session(route):
+        route.fulfill(status=200, content_type="application/json", body=json.dumps(session_body))
+
+    def handle_project_status(route):
+        route.fulfill(status=200, content_type="application/json", body=json.dumps(status_response))
+
+    page.add_init_script(
+        "document.addEventListener('DOMContentLoaded', () => {"
+        "  document.getElementById('frame-supabase').dataset.locked = 'false';"
+        "});"
+    )
+    page.route(f"{live_app_url}/api/session", handle_session)
+    page.route(f"{live_app_url}/api/supabase/project-status", handle_project_status)
+
+    page.goto(live_app_url)
+
+    page.wait_for_selector("#supabase-check-status-submit", state="visible")
+    assert not page.is_disabled("#supabase-check-status-submit")
+    assert "Missing Organization Projects: Read" in page.inner_text("#supabase-error")
+
+    # The visitor fixed the permission in Supabase's dashboard on the same
+    # token -- clicking "Check again" must be able to succeed now.
+    status_response["valid"] = True
+    status_response["status"] = "ACTIVE_HEALTHY"
+
+    def handle_connection_info(route):
+        route.fulfill(status=200, content_type="application/json", body=json.dumps({"valid": True}))
+
+    page.route(f"{live_app_url}/api/supabase/connection-info", handle_connection_info)
+    page.click("#supabase-check-status-submit")
+    page.wait_for_selector('#frame-supabase[data-status="done"]')
+
+
+def test_connection_info_insufficient_permissions_offers_a_retry_not_a_dead_end(
+    page, live_app_url
+):
+    """Same bug, one step later: project-status reports ACTIVE_HEALTHY but
+    connection-info then fails for a permission reason. Before this fix,
+    handleProjectStatusResult unconditionally returned "ready" once status
+    was healthy, regardless of whether the connection-info call inside it
+    actually succeeded -- so pollUntilReady stopped polling as if the frame
+    were done, with no error surfaced and no retry button, the worst
+    version of the dead end."""
+    session_body = {
+        "frames": {
+            "supabase": {
+                "complete": False,
+                "provisioning": True,
+                "display": {"ref": "abcdefghijklmnopqrst", "name": "Test Project"},
+            }
+        }
+    }
+    connection_info_response = {
+        "valid": False,
+        "reason": "insufficient_permissions",
+        "message": "Missing Connection Pooling: Read",
+    }
+
+    def handle_session(route):
+        route.fulfill(status=200, content_type="application/json", body=json.dumps(session_body))
+
+    def handle_project_status(route):
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps({"valid": True, "status": "ACTIVE_HEALTHY"}),
+        )
+
+    def handle_connection_info(route):
+        route.fulfill(
+            status=200, content_type="application/json", body=json.dumps(connection_info_response)
+        )
+
+    page.add_init_script(
+        "document.addEventListener('DOMContentLoaded', () => {"
+        "  document.getElementById('frame-supabase').dataset.locked = 'false';"
+        "});"
+    )
+    page.route(f"{live_app_url}/api/session", handle_session)
+    page.route(f"{live_app_url}/api/supabase/project-status", handle_project_status)
+    page.route(f"{live_app_url}/api/supabase/connection-info", handle_connection_info)
+
+    page.goto(live_app_url)
+
+    page.wait_for_selector("#supabase-check-status-submit", state="visible")
+    assert not page.is_disabled("#supabase-check-status-submit")
+    assert "Missing Connection Pooling: Read" in page.inner_text("#supabase-error")
+    assert page.get_attribute("#frame-supabase", "data-status") != "done"
+
+    connection_info_response["valid"] = True
+    page.click("#supabase-check-status-submit")
+    page.wait_for_selector('#frame-supabase[data-status="done"]')
+
+
 def test_restore_from_session_shows_deployed_service_link_when_server_reports_deployed(
     page, live_app_url
 ):

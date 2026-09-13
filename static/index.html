@@ -3399,8 +3399,12 @@
       return "error";
     }
     if (body.status === "ACTIVE_HEALTHY") {
-      await fetchSupabaseConnectionInfo();
-      return "ready";
+      // fetchSupabaseConnectionInfo() can itself fail (e.g. a token missing
+      // Connection Pooling: Read) -- reporting "ready" regardless used to
+      // make pollUntilReady stop as if the frame were done, with the
+      // failure's error text on screen but no way to retry.
+      const ok = await fetchSupabaseConnectionInfo();
+      return ok ? "ready" : "error";
     }
     if (body.status === "INIT_FAILED") {
       // Terminal, unlike the poll-timeout case: the project will never
@@ -3424,6 +3428,18 @@
     const body = await fetchProjectStatus();
     if (generation !== supabasePollGeneration) return;
     const outcome = await handleProjectStatusResult(body);
+    if (outcome === "error") {
+      // Recoverable: the project already exists by this point (create-
+      // project already succeeded to reach the provisioning/polling stage)
+      // -- a permission added to the same token in Supabase's dashboard, or
+      // a transient rate-limit/network blip, needs a way to retry without
+      // going all the way back to re-entering a credential (which would
+      // also risk orphaning this already-created project's ref/db_pass).
+      // Stop automatic polling in favor of a manual retry rather than
+      // hammering a failing call every SUPABASE_POLL_INTERVAL_MS.
+      document.getElementById("supabase-check-status-submit").style.display = "inline-block";
+      return;
+    }
     if (outcome !== "pending") return;
     if (Date.now() - startedAt >= SUPABASE_POLL_TIMEOUT_MS) {
       supabaseError("err_supabase_provisioning_timeout");
@@ -3447,6 +3463,12 @@
     const outcome = await handleProjectStatusResult(body);
     if (outcome === "pending") {
       supabaseError("err_supabase_provisioning_timeout");
+    }
+    if (outcome === "pending" || outcome === "error") {
+      // "error" here means the retry itself failed again (e.g. the visitor
+      // hasn't fixed the permission yet) -- re-enable the button rather
+      // than leaving it disabled from the top of this function forever,
+      // or a single failed manual retry would itself become a dead end.
       checkAgainBtn.style.display = "inline-block";
       checkAgainBtn.disabled = false;
     }
@@ -3658,6 +3680,10 @@
     pollRenderDeployStatus(Date.now(), renderDeployPollGeneration);
   }
 
+  // Returns whether the frame actually completed -- callers must not treat
+  // "the status call succeeded" as "the frame is done" without checking
+  // this, since a permission-shaped (or any other) connection-info failure
+  // here does not mean the project stopped existing.
   async function fetchSupabaseConnectionInfo() {
     const stored = readStoredSupabase();
     if (!stored || !stored.ref) {
@@ -3668,7 +3694,7 @@
       // the other dead ends above.
       resetSupabaseConnectSection();
       supabaseError("err_supabase_callback_invalid");
-      return;
+      return false;
     }
     // Assembles and stores the full DATABASE_URL server-side now (db_pass
     // never left the server to begin with) -- this call returns only a
@@ -3676,9 +3702,10 @@
     const body = await callSupabaseRelay("/api/supabase/connection-info");
     if (!body.valid) {
       supabaseErrorForReason(body.reason, body.message);
-      return;
+      return false;
     }
     completeFrame("supabase", "project_prefix", stored.name);
+    return true;
   }
 
   // Server-driven now, not a sessionStorage read: GET /api/session is the
