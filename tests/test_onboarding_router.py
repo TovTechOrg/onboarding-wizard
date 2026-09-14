@@ -274,11 +274,7 @@ async def test_validate_supabase_key_stores_the_key_and_returns_orgs(monkeypatch
             orgs=[supabase_client.SupabaseOrg(slug="org-one", name="Org One")]
         )
 
-    async def fake_list_projects(pat):
-        return supabase_client.SupabaseProjectsListed()
-
     monkeypatch.setattr(supabase_client, "validate_key", fake_validate)
-    monkeypatch.setattr(supabase_client, "list_projects", fake_list_projects)
     client = await _client()
     resp = await client.post(
         "/api/supabase/validate-key",
@@ -288,45 +284,9 @@ async def test_validate_supabase_key_stores_the_key_and_returns_orgs(monkeypatch
     assert resp.json() == {
         "valid": True,
         "orgs": [{"slug": "org-one", "name": "Org One"}],
-        "permission_checks": [
-            {"name": "organizations", "ok": True},
-            {"name": "projects", "ok": True},
-        ],
     }
     stored = fake.read_frame(session_id, "supabase")
     assert stored["api_key"] == "sbp_SENTINEL"
-
-
-async def test_validate_supabase_key_reports_a_missing_projects_permission(monkeypatch):
-    """The key itself is valid (Organizations: Read works), but the
-    account-wide Projects (Read) probe 403s -- the checklist must reflect
-    this precisely, distinct from the organizations check, so the visitor
-    knows exactly which permission to add on a new token."""
-    fake = _use_fake_session_store(monkeypatch)
-    session_id = fake.create_session()
-
-    async def fake_validate(pat):
-        return supabase_client.SupabaseKeyValid(orgs=[])
-
-    async def fake_list_projects(pat):
-        return supabase_client.SupabaseApiFailed(reason="insufficient_permissions")
-
-    monkeypatch.setattr(supabase_client, "validate_key", fake_validate)
-    monkeypatch.setattr(supabase_client, "list_projects", fake_list_projects)
-    client = await _client()
-    resp = await client.post(
-        "/api/supabase/validate-key",
-        json={"key": "sbp_SENTINEL"},
-        cookies={"onboarding_session": session_id},
-    )
-    assert resp.json() == {
-        "valid": True,
-        "orgs": [],
-        "permission_checks": [
-            {"name": "organizations", "ok": True},
-            {"name": "projects", "ok": False},
-        ],
-    }
 
 
 async def test_validate_supabase_key_discards_a_previous_projects_data(monkeypatch):
@@ -349,11 +309,7 @@ async def test_validate_supabase_key_discards_a_previous_projects_data(monkeypat
     async def fake_validate(pat):
         return supabase_client.SupabaseKeyValid(orgs=[])
 
-    async def fake_list_projects(pat):
-        return supabase_client.SupabaseProjectsListed()
-
     monkeypatch.setattr(supabase_client, "validate_key", fake_validate)
-    monkeypatch.setattr(supabase_client, "list_projects", fake_list_projects)
     client = await _client()
     await client.post(
         "/api/supabase/validate-key",
@@ -385,11 +341,7 @@ async def test_validate_supabase_key_preserves_project_when_requested(monkeypatc
     async def fake_validate(pat):
         return supabase_client.SupabaseKeyValid(orgs=[])
 
-    async def fake_list_projects(pat):
-        return supabase_client.SupabaseProjectsListed()
-
     monkeypatch.setattr(supabase_client, "validate_key", fake_validate)
-    monkeypatch.setattr(supabase_client, "list_projects", fake_list_projects)
     client = await _client()
     await client.post(
         "/api/supabase/validate-key",

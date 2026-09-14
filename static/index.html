@@ -1076,7 +1076,6 @@
           <div class="frame-instructions" data-i18n="frame3_instructions"></div>
           <input id="supabase-key-input" type="password" autocomplete="off">
           <button id="supabase-key-submit" type="button" data-i18n="validate_supabase_key_button"></button>
-          <ul id="supabase-permission-checklist"></ul>
         </div>
         <div id="supabase-org-section" style="display: none;">
           <p data-i18n="frame3_org_instructions"></p>
@@ -1287,13 +1286,11 @@
       frame2_check_installation_none: "No installation found yet — install the App first, then Validate again",
       frame2_check_webhook: "Webhook URL matches",
       account_prefix: "account: ",
-      frame3_instructions: "Paste a Supabase Personal Access Token (Account → Access Tokens → Generate new token). If your account has access to Scoped tokens, prefer one — check these permissions when creating it: Organizations (Read), Organization Projects (Read-write), Projects (Read), Connection Pooling (Read). A Classic token also works. This lets the wizard create a new project on your own Supabase account.",
+      frame3_instructions: "Paste a Supabase Personal Access Token (Account → Access Tokens → Generate new token). If your account has access to Scoped tokens, prefer one — check these permissions when creating it: Organizations (Read), Organization Projects (Read-write), Project Settings (Read), Connection Pooling (Read). A Classic token also works. This lets the wizard create a new project on your own Supabase account.",
       frame3_name_placeholder: "pr-review-bot",
       validate_supabase_key_button: "Validate",
       frame3_org_instructions: "Choose which Supabase organization to create the project in.",
       create_project_button: "Create Project",
-      frame3_check_organizations: "Organizations (Read)",
-      frame3_check_projects: "Projects (Read)",
       frame3_provisioning: "Provisioning your Supabase project… this takes about 2 minutes.",
       check_again_button: "Check again",
       badge_provisioning: "Provisioning…",
@@ -1313,7 +1310,7 @@
       err_supabase_provisioning_failed: "Supabase couldn't finish setting up your project. Try creating it again.",
       err_supabase_provisioning_timeout: "Still provisioning — this is taking longer than usual. You can check again, or come back later.",
       err_supabase_missing_organizations_permission: "Your token is missing the \"Organizations (Read)\" permission. Supabase doesn't let you edit a token's permissions after creation — generate a new token with this permission and paste it below.",
-      err_supabase_missing_projects_permission: "Your token is missing the \"Projects (Read)\" permission. Supabase doesn't let you edit a token's permissions after creation — generate a new token with this permission and paste it below.",
+      err_supabase_missing_projects_permission: "Your token is missing the \"Project Settings (Read)\" permission. Supabase doesn't let you edit a token's permissions after creation — generate a new token with this permission and paste it below; your existing project will be reused, not recreated.",
       err_supabase_missing_organization_projects_permission: "Your token is missing the \"Organization Projects (Read-write)\" permission. Supabase doesn't let you edit a token's permissions after creation — generate a new token with this permission and paste it below.",
       err_supabase_missing_connection_pooling_permission: "Your project was created, but your token is missing the \"Connection Pooling (Read)\" permission needed to finish connecting to it. Supabase doesn't let you edit a token's permissions after creation — generate a new token with this permission and paste it below; your existing project will be reused, not recreated.",
       err_supabase_project_name_taken: "A project with this name already exists in that organization and isn't one this wizard created. Pick a different project name.",
@@ -1455,13 +1452,11 @@
       frame2_check_installation_none: "לא נמצאה התקנה עדיין — התקינו את האפליקציה קודם, ואז בדקו שוב",
       frame2_check_webhook: "כתובת ה-Webhook תואמת",
       account_prefix: "חשבון: ",
-      frame3_instructions: "הדביקו Personal Access Token של Supabase:<ol><li>Account</li><li>Access Tokens</li><li>Generate new token</li></ol>אם לחשבון שלכם יש גישה לטוקנים מסוג Scoped, עדיף להשתמש בהם — בעת היצירה סמנו את ההרשאות הבאות:<ol><li>Organizations (Read)</li><li>Organization Projects (Read-write)</li><li>Projects (Read)</li><li>Connection Pooling (Read)</li></ol>גם טוקן מסוג Classic יעבוד. זה מאפשר לאשף ליצור פרויקט חדש בחשבון ה-Supabase שלכם.",
+      frame3_instructions: "הדביקו Personal Access Token של Supabase:<ol><li>Account</li><li>Access Tokens</li><li>Generate new token</li></ol>אם לחשבון שלכם יש גישה לטוקנים מסוג Scoped, עדיף להשתמש בהם — בעת היצירה סמנו את ההרשאות הבאות:<ol><li>Organizations (Read)</li><li>Organization Projects (Read-write)</li><li>Project Settings (Read)</li><li>Connection Pooling (Read)</li></ol>גם טוקן מסוג Classic יעבוד. זה מאפשר לאשף ליצור פרויקט חדש בחשבון ה-Supabase שלכם.",
       frame3_name_placeholder: "pr-review-bot",
       validate_supabase_key_button: "אימות",
       frame3_org_instructions: "בחרו לאיזה ארגון ב-Supabase ליצור את הפרויקט.",
       create_project_button: "יצירת פרויקט",
-      frame3_check_organizations: "Organizations (Read)",
-      frame3_check_projects: "Projects (Read)",
       frame3_provisioning: "הפרויקט שלכם ב-Supabase בהקמה… זה לוקח כשתי דקות.",
       check_again_button: "בדיקה מחדש",
       badge_provisioning: "בהקמה…",
@@ -1481,7 +1476,7 @@
       err_supabase_provisioning_failed: "Supabase לא הצליח לסיים את הקמת הפרויקט. נסו ליצור אותו מחדש.",
       err_supabase_provisioning_timeout: "עדיין בהקמה — זה לוקח יותר זמן מהרגיל. אפשר לבדוק שוב, או לחזור מאוחר יותר.",
       err_supabase_missing_organizations_permission: "לטוקן שלכם חסרה ההרשאה \"Organizations (Read)\". ב-Supabase אי אפשר לערוך הרשאות של טוקן לאחר יצירתו — צרו טוקן חדש עם הרשאה זו והדביקו אותו למטה.",
-      err_supabase_missing_projects_permission: "לטוקן שלכם חסרה ההרשאה \"Projects (Read)\". ב-Supabase אי אפשר לערוך הרשאות של טוקן לאחר יצירתו — צרו טוקן חדש עם הרשאה זו והדביקו אותו למטה.",
+      err_supabase_missing_projects_permission: "לטוקן שלכם חסרה ההרשאה \"Project Settings (Read)\". ב-Supabase אי אפשר לערוך הרשאות של טוקן לאחר יצירתו — צרו טוקן חדש עם הרשאה זו והדביקו אותו למטה; הפרויקט הקיים שלכם ישמש מחדש ולא ייווצר מחדש.",
       err_supabase_missing_organization_projects_permission: "לטוקן שלכם חסרה ההרשאה \"Organization Projects (Read-write)\". ב-Supabase אי אפשר לערוך הרשאות של טוקן לאחר יצירתו — צרו טוקן חדש עם הרשאה זו והדביקו אותו למטה.",
       err_supabase_missing_connection_pooling_permission: "הפרויקט שלכם נוצר, אך לטוקן שלכם חסרה ההרשאה \"Connection Pooling (Read)\" הנדרשת כדי לסיים את החיבור אליו. ב-Supabase אי אפשר לערוך הרשאות של טוקן לאחר יצירתו — צרו טוקן חדש עם הרשאה זו והדביקו אותו למטה; הפרויקט הקיים שלכם ישמש מחדש ולא ייווצר מחדש.",
       err_supabase_project_name_taken: "כבר קיים פרויקט בשם הזה בארגון הזה, והוא לא נוצר על ידי האשף הזה. בחרו שם פרויקט אחר.",
@@ -1664,9 +1659,6 @@
     if (lastGithubAppChecklistBody) {
       renderGithubAppChecklist(lastGithubAppChecklistBody);
     }
-    if (lastSupabasePermissionChecks) {
-      renderSupabasePermissionChecklist(lastSupabasePermissionChecks);
-    }
     if (currentSupabaseErrorKey) {
       document.getElementById("supabase-error").textContent =
         t(currentSupabaseErrorKey) +
@@ -1753,7 +1745,6 @@
   // other dynamic string on the page. Cleared whenever the checklist itself
   // is cleared (a fresh validate attempt, or "Change").
   let lastGithubAppChecklistBody = null;
-  let lastSupabasePermissionChecks = null;
   let currentSupabaseErrorKey = null;
   // Only ever set alongside currentSupabaseErrorKey for the
   // insufficient_permissions case -- Supabase's own relayed text, appended
@@ -3185,8 +3176,6 @@
     document.getElementById("supabase-provisioning-section").style.display = "none";
     document.getElementById("supabase-check-status-submit").style.display = "none";
     document.getElementById("supabase-connect-section").style.display = "block";
-    document.getElementById("supabase-permission-checklist").innerHTML = "";
-    lastSupabasePermissionChecks = null;
     document.getElementById("supabase-error").textContent = "";
     // supabase-key-submit is disabled by every validateSupabaseKey() attempt
     // and only re-enabled by that same function's own success/failure
@@ -3305,28 +3294,10 @@
   // touches sessionStorage/localStorage. Every later Supabase call in
   // this frame goes through callSupabaseRelay(), which sends no
   // credential at all (the server reads it back from the session).
-  function renderSupabasePermissionChecklist(checks) {
-    lastSupabasePermissionChecks = checks;
-    const labelKeys = {
-      organizations: "frame3_check_organizations",
-      projects: "frame3_check_projects",
-    };
-    const list = document.getElementById("supabase-permission-checklist");
-    list.innerHTML = "";
-    checks.forEach((check) => {
-      const li = document.createElement("li");
-      li.className = check.ok ? "check-pass" : "check-fail";
-      li.textContent = `${check.ok ? "✓" : "✗"} ${t(labelKeys[check.name] || check.name)}`;
-      list.appendChild(li);
-    });
-  }
-
   async function validateSupabaseKey() {
     const input = document.getElementById("supabase-key-input");
     const key = input.value.trim();
     document.getElementById("supabase-error").textContent = "";
-    document.getElementById("supabase-permission-checklist").innerHTML = "";
-    lastSupabasePermissionChecks = null;
     currentSupabaseErrorKey = null;
     currentSupabaseErrorMessage = null;
     if (!key) {
@@ -3370,26 +3341,6 @@
     }
     input.value = "";
     submitBtn.disabled = false;
-    const checks = body.permission_checks || [];
-    const failedCheck = checks.find((c) => !c.ok);
-    if (failedCheck) {
-      // The key itself is valid, but a scoped-token permission this frame
-      // needs is missing. Supabase gives no way to edit a token's
-      // permissions after creation, so the only fix is a new token --
-      // stay right here on the connect-section (already visible) with the
-      // checklist showing exactly what's missing, rather than proceeding
-      // to the org picker. growFrameToFit wraps this since the checklist
-      // and error text grow the section's content height, same as the
-      // GitHub App checklist reveal.
-      growFrameToFit("supabase", () => {
-        setFrameStatus("supabase", "error");
-        renderSupabasePermissionChecklist(checks);
-        supabaseError(
-          SUPABASE_MISSING_PERMISSION_KEYS[failedCheck.name] || "err_supabase_insufficient_permissions"
-        );
-      });
-      return;
-    }
     if (body.orgs.length === 0) {
       resetSupabaseConnectSection();
       supabaseError("err_supabase_no_organizations");

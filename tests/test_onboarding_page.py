@@ -494,7 +494,7 @@ async def test_frame3_instructions_recommend_a_scoped_token_with_named_permissio
     assert "Scoped" in body
     assert "Organizations" in body
     assert "Organization Projects" in body
-    assert "Projects (Read)" in body
+    assert "Project Settings (Read)" in body
     assert "Connection Pooling" in body
 
 

@@ -209,43 +209,6 @@ async def get_project_status(
 
 
 @dataclasses.dataclass(frozen=True)
-class SupabaseProjectsListed:
-    pass
-
-
-async def list_projects(pat: str) -> SupabaseProjectsListed | SupabaseApiFailed:
-    """GET /v1/projects -- a read-only, account-wide probe used solely to
-    confirm the visitor's token carries the "Projects (Read)" scoped-token
-    permission, the same one that later gates get_project_status's per-ref
-    read (see
-    docs/superpowers/research/2026-09-14-supabase-scoped-token-permissions.md).
-    Checked once, at validate-key time -- before any project exists -- so a
-    missing permission is caught immediately rather than surfacing later as
-    a 403 mid-provisioning. No project data from the response is ever kept;
-    only whether the call succeeded matters."""
-    try:
-        async with httpx.AsyncClient(base_url=SUPABASE_API_BASE, timeout=15.0) as client:
-            response = await client.get(
-                "/projects",
-                headers={"Authorization": f"Bearer {pat}"},
-            )
-    except httpx.HTTPError:
-        return SupabaseApiFailed(reason="supabase_unreachable")
-
-    if response.status_code == 401:
-        return SupabaseApiFailed(reason="unauthorized")
-    if response.status_code == 403:
-        return SupabaseApiFailed(
-            reason="insufficient_permissions", message=_extract_message(response)
-        )
-    if response.status_code == 429:
-        return SupabaseApiFailed(reason="rate_limited")
-    if response.status_code != 200:
-        return SupabaseApiFailed(reason="supabase_unreachable")
-    return SupabaseProjectsListed()
-
-
-@dataclasses.dataclass(frozen=True)
 class SupabaseOrgProject:
     ref: str
     name: str

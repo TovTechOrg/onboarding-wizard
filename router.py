@@ -696,14 +696,6 @@ async def validate_supabase_key(payload: SupabaseKeyRequest, request: Request) -
         return {"valid": False, "reason": "no_session"}
     result = await supabase_client.validate_key(payload.key)
     if isinstance(result, supabase_client.SupabaseKeyValid):
-        # Read-only probe for the "Projects (Read)" scoped-token permission
-        # -- the same one that later gates get_project_status's per-ref
-        # read -- checked here, before any project exists, so the gap is
-        # caught immediately as a checklist item rather than surfacing
-        # later as a mid-provisioning 403. See
-        # docs/superpowers/research/2026-09-14-supabase-scoped-token-permissions.md.
-        projects_result = await supabase_client.list_projects(payload.key)
-        projects_ok = isinstance(projects_result, supabase_client.SupabaseProjectsListed)
         # replace=True (the default): a resubmitted key via "Change" must
         # discard any previous ref/db_pass/database_url outright -- see
         # test_validate_supabase_key_discards_a_previous_projects_data.
@@ -722,10 +714,6 @@ async def validate_supabase_key(payload: SupabaseKeyRequest, request: Request) -
         return {
             "valid": True,
             "orgs": [{"slug": o.slug, "name": o.name} for o in result.orgs],
-            "permission_checks": [
-                {"name": "organizations", "ok": True},
-                {"name": "projects", "ok": projects_ok},
-            ],
         }
     if result.message:
         return {"valid": False, "reason": result.reason, "message": result.message}

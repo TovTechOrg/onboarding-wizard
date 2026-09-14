@@ -249,7 +249,6 @@ async def test_create_project_403_with_non_dict_json_reports_insufficient_permis
 
 PROJECT_STATUS_URL = "https://api.supabase.com/v1/projects/abcdefghijklmnopqrst"
 POOLER_URL = "https://api.supabase.com/v1/projects/abcdefghijklmnopqrst/config/database/pooler"
-LIST_PROJECTS_URL = "https://api.supabase.com/v1/projects"
 ORG_PROJECTS_URL = "https://api.supabase.com/v1/organizations/org-one/projects"
 
 _POOLER_ENTRIES = [
@@ -447,45 +446,6 @@ async def test_get_connection_info_malformed_entries_with_null_is_pooler_config_
             "a", "abcdefghijklmnopqrst", session_id="s1"
         )
     assert result == supabase_client.SupabaseApiFailed(reason="pooler_config_unavailable")
-
-
-# list_projects() -- a read-only account-wide probe used solely to confirm
-# the visitor's token carries the "Projects (Read)" scoped-token permission
-# (the same one that later gates get_project_status's per-ref read) before
-# any project exists, so the gap is caught at validate-key time instead of
-# surfacing later as a mid-provisioning 403.
-
-
-async def test_list_projects_ok():
-    with respx.mock:
-        respx.get(LIST_PROJECTS_URL).mock(return_value=httpx.Response(200, json=[]))
-        result = await supabase_client.list_projects("a")
-    assert result == supabase_client.SupabaseProjectsListed()
-
-
-async def test_list_projects_forbidden_reports_insufficient_permissions():
-    with respx.mock:
-        respx.get(LIST_PROJECTS_URL).mock(
-            return_value=httpx.Response(403, json={"message": "Missing Projects: Read"})
-        )
-        result = await supabase_client.list_projects("a")
-    assert result == supabase_client.SupabaseApiFailed(
-        reason="insufficient_permissions", message="Missing Projects: Read"
-    )
-
-
-async def test_list_projects_unauthorized():
-    with respx.mock:
-        respx.get(LIST_PROJECTS_URL).mock(return_value=httpx.Response(401))
-        result = await supabase_client.list_projects("a")
-    assert result == supabase_client.SupabaseApiFailed(reason="unauthorized")
-
-
-async def test_list_projects_unreachable_on_5xx():
-    with respx.mock:
-        respx.get(LIST_PROJECTS_URL).mock(return_value=httpx.Response(500))
-        result = await supabase_client.list_projects("a")
-    assert result == supabase_client.SupabaseApiFailed(reason="supabase_unreachable")
 
 
 # find_org_project_by_name() -- GET /v1/organizations/{slug}/projects,

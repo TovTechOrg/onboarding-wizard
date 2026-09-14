@@ -758,6 +758,48 @@ not in prose about who calls you.
   - Reached via back-and-forth brainstorming in-session, not a written
     spec -- a small enough, single-frame change that the bounded path's
     in-chat design was enough.
+- **Corrected 2026-09-14, later the same day: the preflight "Projects
+  (Read)" checklist item above was itself wrong and has been removed
+  entirely** (`supabase_client.list_projects()`, the `permission_checks`
+  response field, and the frontend's checklist widget are all deleted --
+  `validate-key` now returns only `{valid, orgs}`, same shape as before the
+  checklist existed). A visitor hit the checklist-blind "Projects (Read)
+  missing" 403 *after* project creation despite the checklist having
+  passed at validate-key time, which shouldn't have been reachable if the
+  checklist tested the right thing. Live-tested against a real Supabase
+  account with two different scoped tokens (never guessed): `GET
+  /v1/projects` (the checklist's probe, needing the "Projects
+  account-wide: Read" toggle) and `GET /v1/projects/{ref}` (what
+  `get_project_status` actually calls) are gated by **two independent,
+  separately-toggled permissions with no reliable relationship** -- a
+  token with only "Project Settings: Read" granted 403'd on the former but
+  succeeded on the latter, and a token adding "Projects account-wide:
+  Read" on top changed only the former. This falsifies the same-day
+  "Corrected" bullet above in a second way: it's not just that
+  `get_project_status` was mis-attributed to "Organization Projects"
+  instead of "Projects account-wide" -- "Projects account-wide" was never
+  the right category for it at all. The real gate is **"Project Settings:
+  Read"**, a project-scoped category with no account-wide list endpoint to
+  preflight against before a project exists (the same structural dead end
+  "Connection Pooling" already hit) -- confirmed by testing with only that
+  one permission and no others, and successfully reading back a live
+  project's status. The visitor-facing permission list is now
+  **Organizations (Read), Organization Projects (Read-write), Project
+  Settings (Read), Connection Pooling (Read)** -- "Projects account-wide"
+  is dropped outright, not swapped 1:1, since nothing in this service's
+  actual call graph uses `GET /v1/projects` (the account-wide list
+  endpoint) once its only caller (the now-deleted checklist probe) is
+  gone. The reactive revert-to-connect-section path for this failure
+  (`handleProjectStatusResult` -> `supabaseErrorForReason(..., "projects")`)
+  needed no changes -- it already existed and already worked correctly;
+  only the unsound preflight layer sitting in front of it is gone. Lesson
+  for future permission-mapping work in this file: a same-account,
+  same-session live test that confirms two calls fail *together* proves
+  only that one particular token lacked both permissions being tested --
+  it does not prove the two calls share a permission, since a token
+  lacking every relevant permission fails everything by construction. Only
+  a token with *one* of the two permissions and not the other (tested
+  here) can actually distinguish "same gate" from "two gates."
 
 ## What sub-project 4 (LLM provider credential UI) adds to these rules
 

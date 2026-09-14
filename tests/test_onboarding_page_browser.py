@@ -138,9 +138,9 @@ def test_project_status_insufficient_permissions_reverts_to_connect_section(
     page, live_app_url
 ):
     """Bug report: create-project already succeeded (the project genuinely
-    exists in Supabase), but the same token lacks the "Projects (Read)"
-    permission project-status polling needs. Supabase gives no way to edit
-    a token's permissions after creation, so a bare "Check again" retry
+    exists in Supabase), but the same token lacks the "Project Settings
+    (Read)" permission project-status polling needs. Supabase gives no way
+    to edit a token's permissions after creation, so a bare "Check again" retry
     button (the earlier fix) is itself a dead end -- the only real fix is a
     new token, so the frame must revert to the connect-section (key input)
     with that specific missing permission named. Recovering with a new
@@ -176,7 +176,7 @@ def test_project_status_insufficient_permissions_reverts_to_connect_section(
 
     page.wait_for_selector("#supabase-key-input", state="visible")
     assert not page.is_visible("#supabase-check-status-submit")
-    assert "Projects (Read)" in page.inner_text("#supabase-error")
+    assert "Project Settings (Read)" in page.inner_text("#supabase-error")
 
     # Recovery: a brand-new token (Supabase gives no way to add a
     # permission to the old one), resubmitted through the now-visible
@@ -192,10 +192,6 @@ def test_project_status_insufficient_permissions_reverts_to_connect_section(
             body=json.dumps({
                 "valid": True,
                 "orgs": [{"slug": "org-one", "name": "Org One"}],
-                "permission_checks": [
-                    {"name": "organizations", "ok": True},
-                    {"name": "projects", "ok": True},
-                ],
             }),
         )
 
@@ -294,10 +290,6 @@ def test_connection_info_insufficient_permissions_reverts_to_connect_section(
             body=json.dumps({
                 "valid": True,
                 "orgs": [{"slug": "org-one", "name": "Org One"}],
-                "permission_checks": [
-                    {"name": "organizations", "ok": True},
-                    {"name": "projects", "ok": True},
-                ],
             }),
         )
 
