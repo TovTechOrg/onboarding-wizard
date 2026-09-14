@@ -113,6 +113,11 @@ class GithubValidateAppRequest(BaseModel):
 
 class SupabaseKeyRequest(BaseModel):
     key: str = Field(min_length=1, max_length=512)
+    # True only for the error-recovery resubmission (a new token after a
+    # permission gap) -- merges api_key into the frame instead of the
+    # default full replace, so an already-created project's ref/db_pass
+    # survive the token swap. See CLAUDE.md's sub-project 3 section.
+    preserve_project: bool = False
 
 
 class SupabaseCreateProjectRequest(BaseModel):
@@ -691,15 +696,37 @@ async def validate_supabase_key(payload: SupabaseKeyRequest, request: Request) -
         return {"valid": False, "reason": "no_session"}
     result = await supabase_client.validate_key(payload.key)
     if isinstance(result, supabase_client.SupabaseKeyValid):
-        # replace=True: a resubmitted key (via "Change") must discard any
-        # previous ref/db_pass/database_url outright -- see
+        # Read-only probe for the "Projects (Read)" scoped-token permission
+        # -- the same one that later gates get_project_status's per-ref
+        # read -- checked here, before any project exists, so the gap is
+        # caught immediately as a checklist item rather than surfacing
+        # later as a mid-provisioning 403. See
+        # docs/superpowers/research/2026-09-14-supabase-scoped-token-permissions.md.
+        projects_result = await supabase_client.list_projects(payload.key)
+        projects_ok = isinstance(projects_result, supabase_client.SupabaseProjectsListed)
+        # replace=True (the default): a resubmitted key via "Change" must
+        # discard any previous ref/db_pass/database_url outright -- see
         # test_validate_supabase_key_discards_a_previous_projects_data.
+        # preserve_project=True (the error-recovery resubmission) instead
+        # merges api_key only, keeping an already-created project's
+        # ref/db_pass intact -- see
+        # test_validate_supabase_key_preserves_project_when_requested.
         write_result = await _update_frame(
-            session_id, "supabase", {"api_key": payload.key}, replace=True
+            session_id,
+            "supabase",
+            {"api_key": payload.key},
+            replace=not payload.preserve_project,
         )
         if isinstance(write_result, session_store.SessionNotFound):
             return {"valid": False, "reason": "no_session"}
-        return {"valid": True, "orgs": [{"slug": o.slug, "name": o.name} for o in result.orgs]}
+        return {
+            "valid": True,
+            "orgs": [{"slug": o.slug, "name": o.name} for o in result.orgs],
+            "permission_checks": [
+                {"name": "organizations", "ok": True},
+                {"name": "projects", "ok": projects_ok},
+            ],
+        }
     if result.message:
         return {"valid": False, "reason": result.reason, "message": result.message}
     return {"valid": False, "reason": result.reason}
@@ -711,6 +738,35 @@ async def create_supabase_project(payload: SupabaseCreateProjectRequest, request
     supabase_frame = session_id and (await _read_frame(session_id, "supabase"))
     if not supabase_frame or "api_key" not in supabase_frame:
         return {"valid": False, "reason": "no_session"}
+
+    # Checked before ever attempting to create: the error-recovery flow can
+    # resubmit the same org/name after swapping tokens (preserve_project),
+    # and must never re-provision a second project for what's really just a
+    # permission retry. See CLAUDE.md's sub-project 3 section.
+    existing = await supabase_client.find_org_project_by_name(
+        supabase_frame["api_key"], payload.organization_slug, payload.name
+    )
+    if isinstance(existing, supabase_client.SupabaseApiFailed):
+        if existing.message:
+            return {"valid": False, "reason": existing.reason, "message": existing.message}
+        return {"valid": False, "reason": existing.reason}
+    if existing is not None:
+        # Only safe to adopt if THIS session already knows this exact
+        # project's db_pass (i.e. it created it earlier in this same
+        # session) -- Supabase's API never returns a project's password
+        # after creation, so a name collision this session doesn't own is
+        # a dead end for building a working DATABASE_URL, not something to
+        # silently adopt.
+        owns_it = supabase_frame.get("ref") == existing.ref and "db_pass" in supabase_frame
+        if owns_it:
+            return {
+                "valid": True,
+                "ref": existing.ref,
+                "status": existing.status,
+                "name": payload.name,
+            }
+        return {"valid": False, "reason": "project_name_taken"}
+
     db_pass = _secrets.token_urlsafe(24)
     result = await supabase_client.create_project(
         supabase_frame["api_key"], payload.organization_slug, payload.name, db_pass

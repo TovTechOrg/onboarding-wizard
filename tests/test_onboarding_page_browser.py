@@ -134,20 +134,19 @@ def test_restore_from_session_resumes_polling_for_a_supabase_project_without_a_c
     assert not page.is_visible("#supabase-org-section")
 
 
-def test_project_status_insufficient_permissions_offers_a_retry_not_a_dead_end(
+def test_project_status_insufficient_permissions_reverts_to_connect_section(
     page, live_app_url
 ):
     """Bug report: create-project already succeeded (the project genuinely
-    exists in Supabase), but the same token lacks the permission
-    project-status polling needs -- before this fix, handleProjectStatusResult
-    reported the error but pollUntilReady only ever showed the "Check again"
-    button on its own pending-timeout path, so an outright failure left the
-    visitor stuck reading an error with no available action at all. The
-    fix: any failure outcome (not just a pending timeout) reveals "Check
-    again" so the visitor can retry once they've added the missing
-    permission to the SAME token in Supabase's dashboard -- no need to
-    re-paste a credential, which would risk orphaning the already-created
-    project's ref/db_pass."""
+    exists in Supabase), but the same token lacks the "Projects (Read)"
+    permission project-status polling needs. Supabase gives no way to edit
+    a token's permissions after creation, so a bare "Check again" retry
+    button (the earlier fix) is itself a dead end -- the only real fix is a
+    new token, so the frame must revert to the connect-section (key input)
+    with that specific missing permission named. Recovering with a new
+    token must not orphan the already-created project: the resubmission
+    preserves ref/db_pass so the visitor can just pick the org again and
+    continue, rather than a second project being provisioned."""
     session_body = {
         "frames": {
             "supabase": {
@@ -157,11 +156,7 @@ def test_project_status_insufficient_permissions_offers_a_retry_not_a_dead_end(
             }
         }
     }
-    status_response = {
-        "valid": False,
-        "reason": "insufficient_permissions",
-        "message": "Missing Organization Projects: Read",
-    }
+    status_response = {"valid": False, "reason": "insufficient_permissions"}
 
     def handle_session(route):
         route.fulfill(status=200, content_type="application/json", body=json.dumps(session_body))
@@ -179,33 +174,72 @@ def test_project_status_insufficient_permissions_offers_a_retry_not_a_dead_end(
 
     page.goto(live_app_url)
 
-    page.wait_for_selector("#supabase-check-status-submit", state="visible")
-    assert not page.is_disabled("#supabase-check-status-submit")
-    assert "Missing Organization Projects: Read" in page.inner_text("#supabase-error")
+    page.wait_for_selector("#supabase-key-input", state="visible")
+    assert not page.is_visible("#supabase-check-status-submit")
+    assert "Projects (Read)" in page.inner_text("#supabase-error")
 
-    # The visitor fixed the permission in Supabase's dashboard on the same
-    # token -- clicking "Check again" must be able to succeed now.
+    # Recovery: a brand-new token (Supabase gives no way to add a
+    # permission to the old one), resubmitted through the now-visible
+    # connect-section -- must preserve, not orphan, the already-created
+    # project.
+    captured_validate_body = {}
+
+    def handle_validate_key(route):
+        captured_validate_body.update(json.loads(route.request.post_data))
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps({
+                "valid": True,
+                "orgs": [{"slug": "org-one", "name": "Org One"}],
+                "permission_checks": [
+                    {"name": "organizations", "ok": True},
+                    {"name": "projects", "ok": True},
+                ],
+            }),
+        )
+
+    def handle_create_project(route):
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps({
+                "valid": True,
+                "ref": "abcdefghijklmnopqrst",
+                "status": "ACTIVE_HEALTHY",
+                "name": "Test Project",
+            }),
+        )
+
     status_response["valid"] = True
     status_response["status"] = "ACTIVE_HEALTHY"
 
     def handle_connection_info(route):
         route.fulfill(status=200, content_type="application/json", body=json.dumps({"valid": True}))
 
+    page.route(f"{live_app_url}/api/supabase/validate-key", handle_validate_key)
+    page.route(f"{live_app_url}/api/supabase/create-project", handle_create_project)
     page.route(f"{live_app_url}/api/supabase/connection-info", handle_connection_info)
-    page.click("#supabase-check-status-submit")
+
+    page.fill("#supabase-key-input", "sbp_new_token_with_every_permission")
+    page.click("#supabase-key-submit")
+    page.wait_for_selector("#supabase-org-select")
+    assert captured_validate_body["preserve_project"] is True
+
+    page.click("#supabase-org-submit")
     page.wait_for_selector('#frame-supabase[data-status="done"]')
 
 
-def test_connection_info_insufficient_permissions_offers_a_retry_not_a_dead_end(
+def test_connection_info_insufficient_permissions_reverts_to_connect_section(
     page, live_app_url
 ):
     """Same bug, one step later: project-status reports ACTIVE_HEALTHY but
-    connection-info then fails for a permission reason. Before this fix,
-    handleProjectStatusResult unconditionally returned "ready" once status
-    was healthy, regardless of whether the connection-info call inside it
-    actually succeeded -- so pollUntilReady stopped polling as if the frame
-    were done, with no error surfaced and no retry button, the worst
-    version of the dead end."""
+    connection-info then fails for a permission reason ("Connection
+    Pooling" can't be preflighted at validate-key time -- it needs a
+    project ref that doesn't exist until after creation). Must revert to
+    the connect-section the same way as the project-status case, not leave
+    the visitor on a "Provisioning..." screen with only a bare retry
+    button that can never actually fix a permission gap."""
     session_body = {
         "frames": {
             "supabase": {
@@ -215,11 +249,7 @@ def test_connection_info_insufficient_permissions_offers_a_retry_not_a_dead_end(
             }
         }
     }
-    connection_info_response = {
-        "valid": False,
-        "reason": "insufficient_permissions",
-        "message": "Missing Connection Pooling: Read",
-    }
+    connection_info_response = {"valid": False, "reason": "insufficient_permissions"}
 
     def handle_session(route):
         route.fulfill(status=200, content_type="application/json", body=json.dumps(session_body))
@@ -247,13 +277,53 @@ def test_connection_info_insufficient_permissions_offers_a_retry_not_a_dead_end(
 
     page.goto(live_app_url)
 
-    page.wait_for_selector("#supabase-check-status-submit", state="visible")
-    assert not page.is_disabled("#supabase-check-status-submit")
-    assert "Missing Connection Pooling: Read" in page.inner_text("#supabase-error")
+    page.wait_for_selector("#supabase-key-input", state="visible")
+    assert not page.is_visible("#supabase-check-status-submit")
+    assert "Connection Pooling (Read)" in page.inner_text("#supabase-error")
     assert page.get_attribute("#frame-supabase", "data-status") != "done"
 
+    # Recovery: same shape as the project-status case above -- a new token,
+    # preserving (not orphaning) the already-created project.
+    captured_validate_body = {}
+
+    def handle_validate_key(route):
+        captured_validate_body.update(json.loads(route.request.post_data))
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps({
+                "valid": True,
+                "orgs": [{"slug": "org-one", "name": "Org One"}],
+                "permission_checks": [
+                    {"name": "organizations", "ok": True},
+                    {"name": "projects", "ok": True},
+                ],
+            }),
+        )
+
+    def handle_create_project(route):
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps({
+                "valid": True,
+                "ref": "abcdefghijklmnopqrst",
+                "status": "ACTIVE_HEALTHY",
+                "name": "Test Project",
+            }),
+        )
+
     connection_info_response["valid"] = True
-    page.click("#supabase-check-status-submit")
+
+    page.route(f"{live_app_url}/api/supabase/validate-key", handle_validate_key)
+    page.route(f"{live_app_url}/api/supabase/create-project", handle_create_project)
+
+    page.fill("#supabase-key-input", "sbp_new_token_with_every_permission")
+    page.click("#supabase-key-submit")
+    page.wait_for_selector("#supabase-org-select")
+    assert captured_validate_body["preserve_project"] is True
+
+    page.click("#supabase-org-submit")
     page.wait_for_selector('#frame-supabase[data-status="done"]')
 
 

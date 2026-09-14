@@ -208,6 +208,98 @@ async def get_project_status(
     return SupabaseProjectStatus(status=status)
 
 
+@dataclasses.dataclass(frozen=True)
+class SupabaseProjectsListed:
+    pass
+
+
+async def list_projects(pat: str) -> SupabaseProjectsListed | SupabaseApiFailed:
+    """GET /v1/projects -- a read-only, account-wide probe used solely to
+    confirm the visitor's token carries the "Projects (Read)" scoped-token
+    permission, the same one that later gates get_project_status's per-ref
+    read (see
+    docs/superpowers/research/2026-09-14-supabase-scoped-token-permissions.md).
+    Checked once, at validate-key time -- before any project exists -- so a
+    missing permission is caught immediately rather than surfacing later as
+    a 403 mid-provisioning. No project data from the response is ever kept;
+    only whether the call succeeded matters."""
+    try:
+        async with httpx.AsyncClient(base_url=SUPABASE_API_BASE, timeout=15.0) as client:
+            response = await client.get(
+                "/projects",
+                headers={"Authorization": f"Bearer {pat}"},
+            )
+    except httpx.HTTPError:
+        return SupabaseApiFailed(reason="supabase_unreachable")
+
+    if response.status_code == 401:
+        return SupabaseApiFailed(reason="unauthorized")
+    if response.status_code == 403:
+        return SupabaseApiFailed(
+            reason="insufficient_permissions", message=_extract_message(response)
+        )
+    if response.status_code == 429:
+        return SupabaseApiFailed(reason="rate_limited")
+    if response.status_code != 200:
+        return SupabaseApiFailed(reason="supabase_unreachable")
+    return SupabaseProjectsListed()
+
+
+@dataclasses.dataclass(frozen=True)
+class SupabaseOrgProject:
+    ref: str
+    name: str
+    status: str
+
+
+async def find_org_project_by_name(
+    access_token: str, organization_slug: str, name: str
+) -> SupabaseOrgProject | None | SupabaseApiFailed:
+    """GET /v1/organizations/{slug}/projects -- read-only, used by
+    create-project's caller to detect an already-existing project with the
+    same name before attempting to create a duplicate (which would either
+    409 on the name conflict, or -- worse -- provision a second project the
+    visitor didn't intend). Returns None when the list succeeded but no
+    project matches `name` (the normal case: proceed with creation); a
+    SupabaseOrgProject when one does (the caller decides whether this
+    session actually owns it -- i.e. already knows its db_pass -- before
+    treating it as safe to adopt); SupabaseApiFailed if the list call
+    itself failed."""
+    try:
+        async with httpx.AsyncClient(base_url=SUPABASE_API_BASE, timeout=15.0) as client:
+            response = await client.get(
+                f"/organizations/{organization_slug}/projects",
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+    except httpx.HTTPError:
+        return SupabaseApiFailed(reason="supabase_unreachable")
+
+    if response.status_code == 401:
+        return SupabaseApiFailed(reason="unauthorized")
+    if response.status_code == 403:
+        return SupabaseApiFailed(
+            reason="insufficient_permissions", message=_extract_message(response)
+        )
+    if response.status_code == 429:
+        return SupabaseApiFailed(reason="rate_limited")
+    if response.status_code != 200:
+        return SupabaseApiFailed(reason="supabase_unreachable")
+
+    try:
+        projects = response.json()["projects"]
+        match = next((p for p in projects if str(p.get("name")) == name), None)
+    except (ValueError, KeyError, TypeError):
+        return SupabaseApiFailed(reason="supabase_unreachable")
+    if match is None:
+        return None
+    try:
+        return SupabaseOrgProject(
+            ref=str(match["ref"]), name=str(match["name"]), status=str(match["status"])
+        )
+    except (KeyError, TypeError):
+        return SupabaseApiFailed(reason="supabase_unreachable")
+
+
 def _log_session_tag(session_id: str) -> str:
     """A one-way, non-reversible correlation tag for log lines -- lets an
     operator match up log entries for the same request without the log

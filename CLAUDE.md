@@ -649,14 +649,28 @@ not in prose about who calls you.
   convention cannot exercise a language-switch re-render at all.
 - **The visitor-facing instructions name the exact permissions to grant**
   if creating a scoped token: Organizations (Read), Organization
-  Projects (Read-write), Connection Pooling (Read) — matching
-  `validate_key`'s org listing, `create_project`/`get_project_status`'s
-  project calls, and `get_connection_info`'s pooler-config read,
-  respectively. These are Supabase's current dashboard permission-category
-  labels (as of 2026-09-13) and could drift if Supabase reorganizes that
-  UI — there is no API-level way to verify a token's granted permissions
-  ahead of a call that needs them, so this is instructional copy, not a
-  server-side check.
+  Projects (Read-write), Projects (Read), Connection Pooling (Read) —
+  matching `validate_key`'s org listing, `create_project`'s project-create
+  call, `get_project_status`'s project-by-ref read, and
+  `get_connection_info`'s pooler-config read, respectively. These are
+  Supabase's current dashboard permission-category labels (as of
+  2026-09-14) and could drift if Supabase reorganizes that UI — there is
+  no API-level way to verify a token's granted permissions ahead of a call
+  that needs them, so this is instructional copy, not a server-side check.
+  **Corrected 2026-09-14: `get_project_status` (`GET /v1/projects/{ref}`)
+  is gated by the separate account-wide "Projects" category, not
+  "Organization Projects"** — a live visitor hit a 403 on this call despite
+  having granted every permission this bullet used to list, and both a
+  live probe (a real scoped-like token walked through the failing calls)
+  and Supabase's own per-endpoint Management API reference pages (each
+  documenting a fine-grained permission string; `create_project` requires
+  `organization_projects_create` while `get_project` requires
+  `project_admin_read` — different prefixes, different dashboard toggles)
+  confirmed it. `create_project`/`Organization Projects` and
+  `get_connection_info`/`Connection Pooling` were both re-confirmed correct
+  in the same pass — only the `get_project_status` attribution was wrong.
+  See `docs/superpowers/research/2026-09-14-supabase-scoped-token-permissions.md`
+  for the full source trail.
 - **A failure during status polling or connection-info must always leave a
   retry path visible, never a silent dead end (2026-09-14 fix).** Reported
   live: a token that passed `validate_key` (has `Organizations: Read`) and
@@ -684,6 +698,66 @@ not in prose about who calls you.
   the two failure points and drive an actual retry click through to
   `completeFrame` — the source-substring convention every other page test
   uses cannot exercise this kind of multi-step async state transition.
+- **Superseded 2026-09-14, same day: the "Check again" retry button above
+  is gone. Every recoverable Supabase error now reverts the frame to the
+  connect-section (key input), never a bare retry button on the
+  provisioning screen.** Root cause of the *design*, not just the bug the
+  retry button fixed: a Supabase Personal Access Token's permissions
+  cannot be edited after creation -- the visitor must generate a brand-new
+  token regardless of which permission was missing, so "just retry the
+  same call" can never actually be the fix. Concretely:
+  - **`validate-key` gains a permission checklist** (mirroring the GitHub
+    App frame's checklist) for the two permissions safely probable before
+    any project exists: `Organizations: Read` (implied by getting past
+    `GET /v1/organizations` at all) and `Projects: Read` (a new read-only
+    `supabase_client.list_projects()` probe, `GET /v1/projects`). A failed
+    check blocks the org picker and shows exactly what's missing.
+    `Organization Projects: Read-write` (a write permission) and
+    `Connection Pooling: Read` (needs a project `ref` that doesn't exist
+    yet) can't be preflighted this way -- they still only surface
+    reactively, from `create-project` and `connection-info` respectively.
+  - **A resubmitted token after one of those reactive failures must not
+    orphan the already-created project.** `validate-key`'s
+    `preserve_project` request field (default `false`, unchanged default
+    behavior for the existing "Change" full-reset flow) makes the
+    frontend's error-recovery resubmission merge `api_key` only
+    (`replace=False`) instead of wiping
+    `ref`/`db_pass`/`organization_slug`/`name` -- the frontend sets it
+    whenever `readStoredSupabase().ref` is already present, i.e. a project
+    already exists in this session. `showSupabaseOrgSection()` also
+    prefills the org dropdown/name input from that same local record so
+    the visitor can just click Continue.
+  - **`create-project` now checks whether a same-named project already
+    exists in the selected org first**
+    (`supabase_client.find_org_project_by_name`,
+    `GET /v1/organizations/{slug}/projects`) -- this is what makes the
+    `preserve_project` resubmission above actually work without
+    re-provisioning: if the match is this session's own already-known
+    `ref`+`db_pass`, the response reuses it (`{"valid": true, "ref",
+    "status", "name"}`, same shape as a fresh creation, transparent to the
+    client) instead of calling `create_project` again. A name collision
+    this session does *not* own the password for is refused outright
+    (`{"valid": false, "reason": "project_name_taken"}`) rather than
+    silently adopted -- Supabase's API never returns a project's password
+    after creation, so a project whose `db_pass` this session never
+    generated is a dead end for building a working `DATABASE_URL`, not
+    something to guess at.
+  - **Error copy is now fully our own translated strings naming the exact
+    permission**, not Supabase's generic relayed 403 message, for all four
+    known permission gaps
+    (`err_supabase_missing_{organizations,projects,organization_projects,connection_pooling}_permission`)
+    -- each frontend call site (`validateSupabaseKey`,
+    `kickOffProjectCreation`, `handleProjectStatusResult`,
+    `fetchSupabaseConnectionInfo`) passes its own fixed context string to
+    `supabaseErrorForReason`'s new third parameter, since only the caller
+    knows which Supabase API call actually 403'd. `project_creation_rejected`
+    (Supabase's own business-rule rejection text, e.g. a plan-level project
+    cap) and the new `project_name_taken` are both token-independent and
+    still just stay on the org/name section, unchanged in spirit from the
+    superseded design.
+  - Reached via back-and-forth brainstorming in-session, not a written
+    spec -- a small enough, single-frame change that the bounded path's
+    in-chat design was enough.
 
 ## What sub-project 4 (LLM provider credential UI) adds to these rules
 

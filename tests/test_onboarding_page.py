@@ -494,6 +494,7 @@ async def test_frame3_instructions_recommend_a_scoped_token_with_named_permissio
     assert "Scoped" in body
     assert "Organizations" in body
     assert "Organization Projects" in body
+    assert "Projects (Read)" in body
     assert "Connection Pooling" in body
 
 
@@ -564,12 +565,12 @@ async def test_stored_supabase_credentials_are_parsed_defensively():
 
 
 async def test_terminal_supabase_errors_reset_the_connect_section():
-    """INIT_FAILED (from handleProjectStatusResult) and an "unauthorized" or
-    "no_session" server response (the server-side session's stored token is
-    dead, or there's no session record at all) are dead ends --
-    resetSupabaseConnectSection() must run before the error is shown so
-    "Connect Supabase" is back on screen to restart the flow, not just fold
-    into the existing error-clearing convention."""
+    """INIT_FAILED (from handleProjectStatusResult) and every other
+    non-recoverable-in-place reason (unauthorized, no_session, rate_limited,
+    pooler_config_unavailable, supabase_unreachable) are dead ends without a
+    fresh submission -- resetSupabaseConnectSection() must run before the
+    error is shown so "Connect Supabase" is back on screen to restart the
+    flow, not just fold into the existing error-clearing convention."""
     client = await _client()
     body = (await client.get("/")).text
 
@@ -582,11 +583,14 @@ async def test_terminal_supabase_errors_reset_the_connect_section():
     reason_fn_start = body.index("function supabaseErrorForReason")
     reason_fn_body = body[reason_fn_start : body.index("async function callSupabaseRelay")]
 
-    unauthorized_branch = reason_fn_body[
-        reason_fn_body.index('if (reason === "unauthorized" || reason === "no_session")') :
-    ]
-    assert "resetSupabaseConnectSection();" in unauthorized_branch.split("const key = {")[0]
-    assert 'no_session: "err_no_session"' in unauthorized_branch.split("const key = {")[1]
+    # The final, catch-all branch handles unauthorized/no_session/
+    # rate_limited/pooler_config_unavailable/unreachable -- everything not
+    # already handled by an earlier, more specific branch.
+    default_branch = reason_fn_body[reason_fn_body.rindex("resetSupabaseConnectSection();") :]
+    assert 'no_session: "err_no_session"' in default_branch
+    assert default_branch.index("resetSupabaseConnectSection();") < default_branch.index(
+        "const key = {"
+    )
 
 
 async def test_reset_supabase_connect_section_reenables_the_validate_button():
@@ -610,7 +614,9 @@ async def test_project_creation_rejected_stays_on_org_section():
     plan-level project cap) is recoverable without re-entering the access
     token -- the org/name section must stay on screen so the visitor can
     retry with a different name or org, not be forced back to
-    "Connect Supabase" with no way to re-enable its Validate button."""
+    "Connect Supabase" with no way to re-enable its Validate button. Same
+    reasoning applies to project_name_taken (the exists-check's own
+    unowned-collision reason)."""
     client = await _client()
     body = (await client.get("/")).text
 
@@ -618,10 +624,17 @@ async def test_project_creation_rejected_stays_on_org_section():
     reason_fn_body = body[reason_fn_start : body.index("async function callSupabaseRelay")]
 
     rejected_branch = reason_fn_body[
-        : reason_fn_body.index('if (reason === "unauthorized" || reason === "no_session")')
+        : reason_fn_body.index('if (reason === "project_name_taken")')
     ]
     assert "resetSupabaseConnectSection()" not in rejected_branch
     assert 'document.getElementById("supabase-error").textContent = message;' in rejected_branch
+
+    name_taken_branch = reason_fn_body[
+        reason_fn_body.index('if (reason === "project_name_taken")') :
+        reason_fn_body.index('if (reason === "insufficient_permissions" &&')
+    ]
+    assert "resetSupabaseConnectSection()" not in name_taken_branch
+    assert 'supabaseError("err_supabase_project_name_taken");' in name_taken_branch
 
 
 async def test_org_section_shown_after_key_validation_opens_the_frame_and_updates_its_badge():

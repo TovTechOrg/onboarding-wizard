@@ -274,23 +274,68 @@ async def test_validate_supabase_key_stores_the_key_and_returns_orgs(monkeypatch
             orgs=[supabase_client.SupabaseOrg(slug="org-one", name="Org One")]
         )
 
+    async def fake_list_projects(pat):
+        return supabase_client.SupabaseProjectsListed()
+
     monkeypatch.setattr(supabase_client, "validate_key", fake_validate)
+    monkeypatch.setattr(supabase_client, "list_projects", fake_list_projects)
     client = await _client()
     resp = await client.post(
         "/api/supabase/validate-key",
         json={"key": "sbp_SENTINEL"},
         cookies={"onboarding_session": session_id},
     )
-    assert resp.json() == {"valid": True, "orgs": [{"slug": "org-one", "name": "Org One"}]}
+    assert resp.json() == {
+        "valid": True,
+        "orgs": [{"slug": "org-one", "name": "Org One"}],
+        "permission_checks": [
+            {"name": "organizations", "ok": True},
+            {"name": "projects", "ok": True},
+        ],
+    }
     stored = fake.read_frame(session_id, "supabase")
     assert stored["api_key"] == "sbp_SENTINEL"
+
+
+async def test_validate_supabase_key_reports_a_missing_projects_permission(monkeypatch):
+    """The key itself is valid (Organizations: Read works), but the
+    account-wide Projects (Read) probe 403s -- the checklist must reflect
+    this precisely, distinct from the organizations check, so the visitor
+    knows exactly which permission to add on a new token."""
+    fake = _use_fake_session_store(monkeypatch)
+    session_id = fake.create_session()
+
+    async def fake_validate(pat):
+        return supabase_client.SupabaseKeyValid(orgs=[])
+
+    async def fake_list_projects(pat):
+        return supabase_client.SupabaseApiFailed(reason="insufficient_permissions")
+
+    monkeypatch.setattr(supabase_client, "validate_key", fake_validate)
+    monkeypatch.setattr(supabase_client, "list_projects", fake_list_projects)
+    client = await _client()
+    resp = await client.post(
+        "/api/supabase/validate-key",
+        json={"key": "sbp_SENTINEL"},
+        cookies={"onboarding_session": session_id},
+    )
+    assert resp.json() == {
+        "valid": True,
+        "orgs": [],
+        "permission_checks": [
+            {"name": "organizations", "ok": True},
+            {"name": "projects", "ok": False},
+        ],
+    }
 
 
 async def test_validate_supabase_key_discards_a_previous_projects_data(monkeypatch):
     """A resubmitted key (via "Change") must not leave the OLD project's
     ref/database_url behind -- GET /api/session's completeness check keys
     off database_url's mere presence, so a stale one would report the
-    frame as already-done for the wrong project on reload."""
+    frame as already-done for the wrong project on reload. Default
+    behavior (preserve_project omitted/false) — unchanged from before the
+    error-recovery redesign."""
     fake = _use_fake_session_store(monkeypatch)
     session_id = fake.create_session()
     fake.update_frame(
@@ -304,7 +349,11 @@ async def test_validate_supabase_key_discards_a_previous_projects_data(monkeypat
     async def fake_validate(pat):
         return supabase_client.SupabaseKeyValid(orgs=[])
 
+    async def fake_list_projects(pat):
+        return supabase_client.SupabaseProjectsListed()
+
     monkeypatch.setattr(supabase_client, "validate_key", fake_validate)
+    monkeypatch.setattr(supabase_client, "list_projects", fake_list_projects)
     client = await _client()
     await client.post(
         "/api/supabase/validate-key",
@@ -315,6 +364,44 @@ async def test_validate_supabase_key_discards_a_previous_projects_data(monkeypat
     assert "ref" not in stored
     assert "database_url" not in stored
     assert stored["api_key"] == "new-key"
+
+
+async def test_validate_supabase_key_preserves_project_when_requested(monkeypatch):
+    """The error-recovery flow resubmits a new token after a permission gap
+    without abandoning the already-created project: preserve_project=true
+    must merge api_key only, leaving ref/db_pass/organization_slug/name
+    (and any database_url) untouched -- the opposite of the "Change" case
+    above."""
+    fake = _use_fake_session_store(monkeypatch)
+    session_id = fake.create_session()
+    fake.update_frame(
+        session_id, "supabase",
+        {
+            "api_key": "old-key", "name": "my-proj", "ref": "x" * 20,
+            "db_pass": "pw123", "organization_slug": "org-one",
+        },
+    )
+
+    async def fake_validate(pat):
+        return supabase_client.SupabaseKeyValid(orgs=[])
+
+    async def fake_list_projects(pat):
+        return supabase_client.SupabaseProjectsListed()
+
+    monkeypatch.setattr(supabase_client, "validate_key", fake_validate)
+    monkeypatch.setattr(supabase_client, "list_projects", fake_list_projects)
+    client = await _client()
+    await client.post(
+        "/api/supabase/validate-key",
+        json={"key": "new-key", "preserve_project": True},
+        cookies={"onboarding_session": session_id},
+    )
+    stored = fake.read_frame(session_id, "supabase")
+    assert stored["api_key"] == "new-key"
+    assert stored["ref"] == "x" * 20
+    assert stored["db_pass"] == "pw123"
+    assert stored["organization_slug"] == "org-one"
+    assert stored["name"] == "my-proj"
 
 
 async def test_validate_supabase_key_reports_invalid_key(monkeypatch):
@@ -376,6 +463,10 @@ async def test_supabase_list_organizations_endpoint_is_gone():
     assert resp.status_code == 404
 
 
+async def _fake_no_existing_project(access_token, organization_slug, name):
+    return None
+
+
 async def test_create_project_generates_db_pass_server_side(monkeypatch):
     fake = _use_fake_session_store(monkeypatch)
     session_id = fake.create_session()
@@ -386,6 +477,7 @@ async def test_create_project_generates_db_pass_server_side(monkeypatch):
         captured["args"] = (access_token, organization_slug, name, db_pass)
         return supabase_client.SupabaseProjectCreated(ref="x" * 20, status="INACTIVE")
 
+    monkeypatch.setattr(supabase_client, "find_org_project_by_name", _fake_no_existing_project)
     monkeypatch.setattr(supabase_client, "create_project", fake_create)
     client = await _client()
     resp = await client.post(
@@ -415,6 +507,7 @@ async def test_create_project_relays_the_rejection_message(monkeypatch):
             message="This organization already has the maximum number of free projects."
         )
 
+    monkeypatch.setattr(supabase_client, "find_org_project_by_name", _fake_no_existing_project)
     monkeypatch.setattr(supabase_client, "create_project", fake_create)
     client = await _client()
     resp = await client.post(
@@ -444,6 +537,7 @@ async def test_create_project_relays_insufficient_permissions_message(monkeypatc
             reason="insufficient_permissions", message="Missing Organization Projects: Read-write"
         )
 
+    monkeypatch.setattr(supabase_client, "find_org_project_by_name", _fake_no_existing_project)
     monkeypatch.setattr(supabase_client, "create_project", fake_create)
     client = await _client()
     resp = await client.post(
@@ -464,6 +558,94 @@ async def test_create_project_with_no_session_fails_closed():
         "/api/supabase/create-project", json={"organization_slug": "org-one", "name": "n"}
     )
     assert resp.json() == {"valid": False, "reason": "no_session"}
+
+
+async def test_create_project_skips_creating_when_this_session_already_owns_it(monkeypatch):
+    """Recovering from a permission gap (a new token submitted, org/name
+    resubmitted) must not re-provision a second project: if the org already
+    has a project by this name AND this session already knows its ref and
+    db_pass (i.e. it created it earlier in this same session), reuse it
+    instead of calling create_project again."""
+    fake = _use_fake_session_store(monkeypatch)
+    session_id = fake.create_session()
+    fake.update_frame(
+        session_id, "supabase",
+        {"api_key": "a", "ref": "x" * 20, "db_pass": "pw123"},
+    )
+
+    async def fake_find(access_token, organization_slug, name):
+        assert (access_token, organization_slug, name) == ("a", "org-one", "my-proj")
+        return supabase_client.SupabaseOrgProject(
+            ref="x" * 20, name="my-proj", status="ACTIVE_HEALTHY"
+        )
+
+    async def fake_create(access_token, organization_slug, name, db_pass):
+        raise AssertionError("create_project must not be called when the session already owns it")
+
+    monkeypatch.setattr(supabase_client, "find_org_project_by_name", fake_find)
+    monkeypatch.setattr(supabase_client, "create_project", fake_create)
+    client = await _client()
+    resp = await client.post(
+        "/api/supabase/create-project",
+        json={"organization_slug": "org-one", "name": "my-proj"},
+        cookies={"onboarding_session": session_id},
+    )
+    assert resp.json() == {
+        "valid": True, "ref": "x" * 20, "status": "ACTIVE_HEALTHY", "name": "my-proj"
+    }
+
+
+async def test_create_project_refuses_a_same_name_project_it_does_not_own(monkeypatch):
+    """A name collision with a project this session has no known db_pass
+    for (e.g. a stale/unrelated project) must never be silently adopted --
+    we cannot construct a working DATABASE_URL for a password we were never
+    given. Report a distinct, actionable reason instead."""
+    fake = _use_fake_session_store(monkeypatch)
+    session_id = fake.create_session()
+    fake.update_frame(session_id, "supabase", {"api_key": "a"})
+
+    async def fake_find(access_token, organization_slug, name):
+        return supabase_client.SupabaseOrgProject(
+            ref="somebodyelsesref0000", name="my-proj", status="ACTIVE_HEALTHY"
+        )
+
+    async def fake_create(access_token, organization_slug, name, db_pass):
+        raise AssertionError("create_project must not be called on an unowned collision")
+
+    monkeypatch.setattr(supabase_client, "find_org_project_by_name", fake_find)
+    monkeypatch.setattr(supabase_client, "create_project", fake_create)
+    client = await _client()
+    resp = await client.post(
+        "/api/supabase/create-project",
+        json={"organization_slug": "org-one", "name": "my-proj"},
+        cookies={"onboarding_session": session_id},
+    )
+    assert resp.json() == {"valid": False, "reason": "project_name_taken"}
+
+
+async def test_create_project_relays_exists_check_failure(monkeypatch):
+    """If the existence probe itself fails (network, permission, rate
+    limit), surface that the same way create_project's own failures are
+    surfaced -- never silently fall through to attempting a create."""
+    fake = _use_fake_session_store(monkeypatch)
+    session_id = fake.create_session()
+    fake.update_frame(session_id, "supabase", {"api_key": "a"})
+
+    async def fake_find(access_token, organization_slug, name):
+        return supabase_client.SupabaseApiFailed(reason="rate_limited")
+
+    async def fake_create(access_token, organization_slug, name, db_pass):
+        raise AssertionError("create_project must not be called when the exists-check fails")
+
+    monkeypatch.setattr(supabase_client, "find_org_project_by_name", fake_find)
+    monkeypatch.setattr(supabase_client, "create_project", fake_create)
+    client = await _client()
+    resp = await client.post(
+        "/api/supabase/create-project",
+        json={"organization_slug": "org-one", "name": "my-proj"},
+        cookies={"onboarding_session": session_id},
+    )
+    assert resp.json() == {"valid": False, "reason": "rate_limited"}
 
 
 async def test_project_status_reads_from_session(monkeypatch):

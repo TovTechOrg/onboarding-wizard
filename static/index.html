@@ -1076,6 +1076,7 @@
           <div class="frame-instructions" data-i18n="frame3_instructions"></div>
           <input id="supabase-key-input" type="password" autocomplete="off">
           <button id="supabase-key-submit" type="button" data-i18n="validate_supabase_key_button"></button>
+          <ul id="supabase-permission-checklist"></ul>
         </div>
         <div id="supabase-org-section" style="display: none;">
           <p data-i18n="frame3_org_instructions"></p>
@@ -1286,11 +1287,13 @@
       frame2_check_installation_none: "No installation found yet — install the App first, then Validate again",
       frame2_check_webhook: "Webhook URL matches",
       account_prefix: "account: ",
-      frame3_instructions: "Paste a Supabase Personal Access Token (Account → Access Tokens → Generate new token). If your account has access to Scoped tokens, prefer one — check these permissions when creating it: Organizations (Read), Organization Projects (Read-write), Connection Pooling (Read). A Classic token also works. This lets the wizard create a new project on your own Supabase account.",
+      frame3_instructions: "Paste a Supabase Personal Access Token (Account → Access Tokens → Generate new token). If your account has access to Scoped tokens, prefer one — check these permissions when creating it: Organizations (Read), Organization Projects (Read-write), Projects (Read), Connection Pooling (Read). A Classic token also works. This lets the wizard create a new project on your own Supabase account.",
       frame3_name_placeholder: "pr-review-bot",
       validate_supabase_key_button: "Validate",
       frame3_org_instructions: "Choose which Supabase organization to create the project in.",
       create_project_button: "Create Project",
+      frame3_check_organizations: "Organizations (Read)",
+      frame3_check_projects: "Projects (Read)",
       frame3_provisioning: "Provisioning your Supabase project… this takes about 2 minutes.",
       check_again_button: "Check again",
       badge_provisioning: "Provisioning…",
@@ -1309,6 +1312,11 @@
       err_supabase_pooler_config_unavailable: "Your project's database connection isn't ready yet. Try again in a moment.",
       err_supabase_provisioning_failed: "Supabase couldn't finish setting up your project. Try creating it again.",
       err_supabase_provisioning_timeout: "Still provisioning — this is taking longer than usual. You can check again, or come back later.",
+      err_supabase_missing_organizations_permission: "Your token is missing the \"Organizations (Read)\" permission. Supabase doesn't let you edit a token's permissions after creation — generate a new token with this permission and paste it below.",
+      err_supabase_missing_projects_permission: "Your token is missing the \"Projects (Read)\" permission. Supabase doesn't let you edit a token's permissions after creation — generate a new token with this permission and paste it below.",
+      err_supabase_missing_organization_projects_permission: "Your token is missing the \"Organization Projects (Read-write)\" permission. Supabase doesn't let you edit a token's permissions after creation — generate a new token with this permission and paste it below.",
+      err_supabase_missing_connection_pooling_permission: "Your project was created, but your token is missing the \"Connection Pooling (Read)\" permission needed to finish connecting to it. Supabase doesn't let you edit a token's permissions after creation — generate a new token with this permission and paste it below; your existing project will be reused, not recreated.",
+      err_supabase_project_name_taken: "A project with this name already exists in that organization and isn't one this wizard created. Pick a different project name.",
       continue_button: "Continue",
       provider_prefix: "provider: ",
       frame4_instructions: "Pick which LLM provider your deployed service will use, then paste or upload its credential.",
@@ -1447,11 +1455,13 @@
       frame2_check_installation_none: "לא נמצאה התקנה עדיין — התקינו את האפליקציה קודם, ואז בדקו שוב",
       frame2_check_webhook: "כתובת ה-Webhook תואמת",
       account_prefix: "חשבון: ",
-      frame3_instructions: "הדביקו Personal Access Token של Supabase:<ol><li>Account</li><li>Access Tokens</li><li>Generate new token</li></ol>אם לחשבון שלכם יש גישה לטוקנים מסוג Scoped, עדיף להשתמש בהם — בעת היצירה סמנו את ההרשאות הבאות:<ol><li>Organizations (Read)</li><li>Organization Projects (Read-write)</li><li>Connection Pooling (Read)</li></ol>גם טוקן מסוג Classic יעבוד. זה מאפשר לאשף ליצור פרויקט חדש בחשבון ה-Supabase שלכם.",
+      frame3_instructions: "הדביקו Personal Access Token של Supabase:<ol><li>Account</li><li>Access Tokens</li><li>Generate new token</li></ol>אם לחשבון שלכם יש גישה לטוקנים מסוג Scoped, עדיף להשתמש בהם — בעת היצירה סמנו את ההרשאות הבאות:<ol><li>Organizations (Read)</li><li>Organization Projects (Read-write)</li><li>Projects (Read)</li><li>Connection Pooling (Read)</li></ol>גם טוקן מסוג Classic יעבוד. זה מאפשר לאשף ליצור פרויקט חדש בחשבון ה-Supabase שלכם.",
       frame3_name_placeholder: "pr-review-bot",
       validate_supabase_key_button: "אימות",
       frame3_org_instructions: "בחרו לאיזה ארגון ב-Supabase ליצור את הפרויקט.",
       create_project_button: "יצירת פרויקט",
+      frame3_check_organizations: "Organizations (Read)",
+      frame3_check_projects: "Projects (Read)",
       frame3_provisioning: "הפרויקט שלכם ב-Supabase בהקמה… זה לוקח כשתי דקות.",
       check_again_button: "בדיקה מחדש",
       badge_provisioning: "בהקמה…",
@@ -1470,6 +1480,11 @@
       err_supabase_pooler_config_unavailable: "חיבור מסד הנתונים של הפרויקט עדיין לא מוכן. נסו שוב בעוד רגע.",
       err_supabase_provisioning_failed: "Supabase לא הצליח לסיים את הקמת הפרויקט. נסו ליצור אותו מחדש.",
       err_supabase_provisioning_timeout: "עדיין בהקמה — זה לוקח יותר זמן מהרגיל. אפשר לבדוק שוב, או לחזור מאוחר יותר.",
+      err_supabase_missing_organizations_permission: "לטוקן שלכם חסרה ההרשאה \"Organizations (Read)\". ב-Supabase אי אפשר לערוך הרשאות של טוקן לאחר יצירתו — צרו טוקן חדש עם הרשאה זו והדביקו אותו למטה.",
+      err_supabase_missing_projects_permission: "לטוקן שלכם חסרה ההרשאה \"Projects (Read)\". ב-Supabase אי אפשר לערוך הרשאות של טוקן לאחר יצירתו — צרו טוקן חדש עם הרשאה זו והדביקו אותו למטה.",
+      err_supabase_missing_organization_projects_permission: "לטוקן שלכם חסרה ההרשאה \"Organization Projects (Read-write)\". ב-Supabase אי אפשר לערוך הרשאות של טוקן לאחר יצירתו — צרו טוקן חדש עם הרשאה זו והדביקו אותו למטה.",
+      err_supabase_missing_connection_pooling_permission: "הפרויקט שלכם נוצר, אך לטוקן שלכם חסרה ההרשאה \"Connection Pooling (Read)\" הנדרשת כדי לסיים את החיבור אליו. ב-Supabase אי אפשר לערוך הרשאות של טוקן לאחר יצירתו — צרו טוקן חדש עם הרשאה זו והדביקו אותו למטה; הפרויקט הקיים שלכם ישמש מחדש ולא ייווצר מחדש.",
+      err_supabase_project_name_taken: "כבר קיים פרויקט בשם הזה בארגון הזה, והוא לא נוצר על ידי האשף הזה. בחרו שם פרויקט אחר.",
       continue_button: "המשך",
       provider_prefix: "ספק: ",
       frame4_instructions: "בחרו איזה ספק LLM השירות שלכם ישתמש בו, ואז הדביקו או העלו את פרטי ההתחברות שלו.",
@@ -1649,6 +1664,9 @@
     if (lastGithubAppChecklistBody) {
       renderGithubAppChecklist(lastGithubAppChecklistBody);
     }
+    if (lastSupabasePermissionChecks) {
+      renderSupabasePermissionChecklist(lastSupabasePermissionChecks);
+    }
     if (currentSupabaseErrorKey) {
       document.getElementById("supabase-error").textContent =
         t(currentSupabaseErrorKey) +
@@ -1735,6 +1753,7 @@
   // other dynamic string on the page. Cleared whenever the checklist itself
   // is cleared (a fresh validate attempt, or "Change").
   let lastGithubAppChecklistBody = null;
+  let lastSupabasePermissionChecks = null;
   let currentSupabaseErrorKey = null;
   // Only ever set alongside currentSupabaseErrorKey for the
   // insufficient_permissions case -- Supabase's own relayed text, appended
@@ -3166,6 +3185,8 @@
     document.getElementById("supabase-provisioning-section").style.display = "none";
     document.getElementById("supabase-check-status-submit").style.display = "none";
     document.getElementById("supabase-connect-section").style.display = "block";
+    document.getElementById("supabase-permission-checklist").innerHTML = "";
+    lastSupabasePermissionChecks = null;
     document.getElementById("supabase-error").textContent = "";
     // supabase-key-submit is disabled by every validateSupabaseKey() attempt
     // and only re-enabled by that same function's own success/failure
@@ -3186,14 +3207,24 @@
     document.getElementById("supabase-error").textContent = t(key);
   }
 
-  function supabaseErrorForReason(reason, message) {
+  // Which fixed, fully-translated copy names the exact missing permission
+  // for a given call context -- passed by each call site below, since only
+  // the caller knows which Supabase API call actually produced a 403.
+  const SUPABASE_MISSING_PERMISSION_KEYS = {
+    organizations: "err_supabase_missing_organizations_permission",
+    projects: "err_supabase_missing_projects_permission",
+    organization_projects: "err_supabase_missing_organization_projects_permission",
+    connection_pooling: "err_supabase_missing_connection_pooling_permission",
+  };
+
+  function supabaseErrorForReason(reason, message, permissionContext) {
     if (reason === "project_creation_rejected" && message) {
-      // Recoverable: the stored access token and chosen org are still
-      // valid — only the specific create-project request was rejected
-      // (e.g. a duplicate project name, or a plan-level project cap).
-      // Stay on the org/name section so the visitor can retry with a
-      // different name or org, rather than being forced back to
-      // re-enter their access token for no reason.
+      // Recoverable, and token-independent: the stored access token and
+      // chosen org are still valid -- only the specific create-project
+      // request was rejected (e.g. a duplicate project name, or a
+      // plan-level project cap). Stay on the org/name section so the
+      // visitor can retry with a different name or org, rather than being
+      // forced back to re-enter their access token for no reason.
       setFrameStatus("supabase", "error");
       currentSupabaseErrorKey = null;
       currentSupabaseErrorMessage = null;
@@ -3202,29 +3233,43 @@
       document.getElementById("supabase-error").textContent = message;
       return;
     }
+    if (reason === "project_name_taken") {
+      // Also token-independent: a naming collision with a project this
+      // session doesn't own, not a permission problem. Same reasoning as
+      // project_creation_rejected above -- stay on the org/name section,
+      // the visitor just needs to pick a different name.
+      supabaseError("err_supabase_project_name_taken");
+      return;
+    }
+    if (reason === "insufficient_permissions" && SUPABASE_MISSING_PERMISSION_KEYS[permissionContext]) {
+      // Supabase gives no way to edit a token's permissions after
+      // creation -- the only real fix is a brand new token, so this is
+      // fully our own translated copy naming the exact permission
+      // (no Supabase relay needed, we already know precisely what's
+      // missing) and reverts the frame back to the connect-section (key
+      // input) rather than leaving the visitor on a dead-end screen.
+      resetSupabaseConnectSection();
+      supabaseError(SUPABASE_MISSING_PERMISSION_KEYS[permissionContext]);
+      return;
+    }
     if (reason === "insufficient_permissions") {
-      // A scoped token that validated but is missing a permission (or a
-      // later action a permission-limited token can't perform) — our own
-      // fixed copy plus Supabase's relayed message when it provides one.
-      // Unlike project_creation_rejected above, the fixed-copy half of this
-      // string IS ours and must re-translate on a language switch, so the
-      // key stays set (currentSupabaseErrorMessage carries the untranslated
-      // remainder) rather than going to null.
-      setFrameStatus("supabase", "error");
+      // No known context (defensive fallback, e.g. a future call site that
+      // forgets to pass one) -- same combined shape as before: our fixed
+      // copy plus Supabase's relayed message when it provides one. Still
+      // reverts to the connect-section for the same reason as above.
+      resetSupabaseConnectSection();
       currentSupabaseErrorKey = "err_supabase_insufficient_permissions";
       currentSupabaseErrorMessage = message || null;
       document.getElementById("supabase-error").textContent =
         t("err_supabase_insufficient_permissions") + (message ? " " + message : "");
       return;
     }
-    // "unauthorized" means the server's stored access_token is dead
-    // (Supabase revoked it) -- terminal, since nothing left on screen can
-    // retry with the same session. "no_session" means the server has no
-    // record of this frame's OAuth step at all (e.g. a session that
-    // expired) -- also terminal, same reset.
-    if (reason === "unauthorized" || reason === "no_session") {
-      resetSupabaseConnectSection();
-    }
+    // Every other reason (unauthorized, no_session, rate_limited,
+    // pooler_config_unavailable, supabase_unreachable, ...) is not
+    // recoverable by retrying the same call in place -- revert to the
+    // connect-section for a fresh attempt rather than leaving the visitor
+    // on the provisioning screen or a bare retry button.
+    resetSupabaseConnectSection();
     const key = {
       unauthorized: "err_supabase_reauthorize",
       no_session: "err_no_session",
@@ -3260,10 +3305,28 @@
   // touches sessionStorage/localStorage. Every later Supabase call in
   // this frame goes through callSupabaseRelay(), which sends no
   // credential at all (the server reads it back from the session).
+  function renderSupabasePermissionChecklist(checks) {
+    lastSupabasePermissionChecks = checks;
+    const labelKeys = {
+      organizations: "frame3_check_organizations",
+      projects: "frame3_check_projects",
+    };
+    const list = document.getElementById("supabase-permission-checklist");
+    list.innerHTML = "";
+    checks.forEach((check) => {
+      const li = document.createElement("li");
+      li.className = check.ok ? "check-pass" : "check-fail";
+      li.textContent = `${check.ok ? "✓" : "✗"} ${t(labelKeys[check.name] || check.name)}`;
+      list.appendChild(li);
+    });
+  }
+
   async function validateSupabaseKey() {
     const input = document.getElementById("supabase-key-input");
     const key = input.value.trim();
     document.getElementById("supabase-error").textContent = "";
+    document.getElementById("supabase-permission-checklist").innerHTML = "";
+    lastSupabasePermissionChecks = null;
     currentSupabaseErrorKey = null;
     currentSupabaseErrorMessage = null;
     if (!key) {
@@ -3273,12 +3336,19 @@
     setFrameStatus("supabase", "checking");
     const submitBtn = document.getElementById("supabase-key-submit");
     submitBtn.disabled = true;
+    // A project already exists in this session (an earlier create-project
+    // succeeded) -- this submission is the error-recovery path (a new
+    // token after a permission gap), not a fresh start, so the server must
+    // merge api_key rather than wiping the already-known ref/db_pass. See
+    // CLAUDE.md's sub-project 3 section.
+    const stored = readStoredSupabase();
+    const preserveProject = !!(stored && stored.ref);
     let resp, body;
     try {
       resp = await fetch("/api/supabase/validate-key", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({key}),
+        body: JSON.stringify({key, preserve_project: preserveProject}),
       });
       if (!resp.ok) throw new Error("bad status");
       body = await resp.json();
@@ -3294,11 +3364,32 @@
       if (body.reason === "invalid_key") {
         supabaseError("err_supabase_invalid_key");
       } else {
-        supabaseErrorForReason(body.reason, body.message);
+        supabaseErrorForReason(body.reason, body.message, "organizations");
       }
       return;
     }
     input.value = "";
+    submitBtn.disabled = false;
+    const checks = body.permission_checks || [];
+    const failedCheck = checks.find((c) => !c.ok);
+    if (failedCheck) {
+      // The key itself is valid, but a scoped-token permission this frame
+      // needs is missing. Supabase gives no way to edit a token's
+      // permissions after creation, so the only fix is a new token --
+      // stay right here on the connect-section (already visible) with the
+      // checklist showing exactly what's missing, rather than proceeding
+      // to the org picker. growFrameToFit wraps this since the checklist
+      // and error text grow the section's content height, same as the
+      // GitHub App checklist reveal.
+      growFrameToFit("supabase", () => {
+        setFrameStatus("supabase", "error");
+        renderSupabasePermissionChecklist(checks);
+        supabaseError(
+          SUPABASE_MISSING_PERMISSION_KEYS[failedCheck.name] || "err_supabase_insufficient_permissions"
+        );
+      });
+      return;
+    }
     if (body.orgs.length === 0) {
       resetSupabaseConnectSection();
       supabaseError("err_supabase_no_organizations");
@@ -3315,6 +3406,16 @@
         option.textContent = org.name;
         select.appendChild(option);
       });
+      // Convenience prefill when recovering from an error with a project
+      // already known (organization_slug/name survive the token swap
+      // above via preserve_project) -- lets the visitor just click
+      // Continue instead of re-picking everything.
+      if (stored && stored.organization_slug) {
+        select.value = stored.organization_slug;
+      }
+      if (stored && stored.name) {
+        document.getElementById("supabase-project-name-input").value = stored.name;
+      }
       showSupabaseOrgSection();
     });
   }
@@ -3355,17 +3456,22 @@
       name,
     });
     if (!body.valid) {
-      supabaseErrorForReason(body.reason, body.message);
+      supabaseErrorForReason(body.reason, body.message, "organization_projects");
       return false;
     }
     // Non-secret continuity state for this page view (polling needs `ref`;
-    // the final completeFrame call needs `name`) -- not a credential, so
-    // sessionStorage is fine here. db_pass/api_key never reach the
-    // browser at all now (session_store.py holds them server-side).
+    // the final completeFrame call needs `name`; `organization_slug` lets a
+    // later error-recovery resubmission prefill the org picker) -- not a
+    // credential, so sessionStorage is fine here. db_pass/api_key never
+    // reach the browser at all now (session_store.py holds them
+    // server-side).
     try {
       sessionStorage.setItem(
         STORAGE_KEYS["supabase"],
-        JSON.stringify({name: body.name, ref: body.ref, status: body.status}),
+        JSON.stringify({
+          name: body.name, ref: body.ref, status: body.status,
+          organization_slug: organizationSlug,
+        }),
       );
     } catch (err) {
       supabaseError("err_supabase_storage_failed");
@@ -3395,7 +3501,7 @@
 
   async function handleProjectStatusResult(body) {
     if (!body.valid) {
-      supabaseErrorForReason(body.reason, body.message);
+      supabaseErrorForReason(body.reason, body.message, "projects");
       return "error";
     }
     if (body.status === "ACTIVE_HEALTHY") {
@@ -3429,15 +3535,12 @@
     if (generation !== supabasePollGeneration) return;
     const outcome = await handleProjectStatusResult(body);
     if (outcome === "error") {
-      // Recoverable: the project already exists by this point (create-
-      // project already succeeded to reach the provisioning/polling stage)
-      // -- a permission added to the same token in Supabase's dashboard, or
-      // a transient rate-limit/network blip, needs a way to retry without
-      // going all the way back to re-entering a credential (which would
-      // also risk orphaning this already-created project's ref/db_pass).
-      // Stop automatic polling in favor of a manual retry rather than
-      // hammering a failing call every SUPABASE_POLL_INTERVAL_MS.
-      document.getElementById("supabase-check-status-submit").style.display = "inline-block";
+      // handleProjectStatusResult() already reverted the frame back to the
+      // connect-section via supabaseErrorForReason() -- a token's
+      // permissions can't be edited after creation, so the only real fix
+      // is a new token, and that resubmission (preserve_project) is what
+      // keeps this already-created project from being orphaned. Nothing
+      // left to do here; stop automatic polling.
       return;
     }
     if (outcome !== "pending") return;
@@ -3463,15 +3566,16 @@
     const outcome = await handleProjectStatusResult(body);
     if (outcome === "pending") {
       supabaseError("err_supabase_provisioning_timeout");
-    }
-    if (outcome === "pending" || outcome === "error") {
-      // "error" here means the retry itself failed again (e.g. the visitor
-      // hasn't fixed the permission yet) -- re-enable the button rather
-      // than leaving it disabled from the top of this function forever,
-      // or a single failed manual retry would itself become a dead end.
+      // Still just waiting on Supabase, not an error -- re-enable the
+      // button rather than leaving it disabled from the top of this
+      // function forever.
       checkAgainBtn.style.display = "inline-block";
       checkAgainBtn.disabled = false;
     }
+    // "error" here already reverted the frame back to the connect-section
+    // via handleProjectStatusResult()'s own supabaseErrorForReason() call
+    // -- the check-again button (on the now-hidden provisioning section)
+    // needs no handling; resetSupabaseConnectSection() already hid it.
   }
 
   let currentRenderDeployErrorKey = null;
@@ -3701,7 +3805,7 @@
     // verdict, never db_user/db_host/db_port/db_name.
     const body = await callSupabaseRelay("/api/supabase/connection-info");
     if (!body.valid) {
-      supabaseErrorForReason(body.reason, body.message);
+      supabaseErrorForReason(body.reason, body.message, "connection_pooling");
       return false;
     }
     completeFrame("supabase", "project_prefix", stored.name);
