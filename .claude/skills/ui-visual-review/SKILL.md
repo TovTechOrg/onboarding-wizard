@@ -26,8 +26,16 @@ endpoint change).
 
 ## How
 
-1. **Start the local server** if it isn't already running (`uv run uvicorn
-   main:app --reload` or this project's equivalent).
+1. **Start the local stack** if it isn't already running. This project
+   refuses to boot without a reachable `DATABASE_URL` (`main.py`'s own boot
+   gate), so use the disposable-Postgres helper shipped alongside this
+   skill rather than pointing at the real Supabase database or hand-rolling
+   a `docker run` each time:
+   ```
+   .claude/skills/ui-visual-review/dev_stack.sh start
+   ```
+   Idempotent — safe to re-run. Tear down afterward with
+   `.claude/skills/ui-visual-review/dev_stack.sh stop`.
 2. **Run the helper script** shipped alongside this skill:
    ```
    uv run --no-project python .claude/skills/ui-visual-review/screenshot_ui.py <url> <out_dir>
