@@ -4,6 +4,10 @@
 ![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)
 ![uv](https://img.shields.io/badge/package%20manager-uv-de5fe9.svg)
 
+**[Read the guide →](https://tovtechorg.github.io/pr-review-bot)**
+— the sibling review-engine project's guide; start here to try the live
+demo or walk through setup.
+
 **[See it work → live demo](https://tovtechorg.github.io/pr-review-bot/demo/)**
 — walk the wizard end to end against mocked Render, GitHub and LLM
 integrations, then watch the bot it "provisions" review a pull request. No
