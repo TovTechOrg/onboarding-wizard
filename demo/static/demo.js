@@ -55,9 +55,87 @@
     renumberKeptFrames();
   }
 
+  var DEMO_APP_ID = "900001";
+  // Body of the synthetic .pem the file input receives. Not a key of any
+  // kind -- demo/github_client.py never reads it.
+  var DEMO_PEM_BODY =
+    "-----BEGIN RSA PRIVATE KEY-----\ndemo-not-a-real-key\n-----END RSA PRIVATE KEY-----\n";
+
+  // Fill the real App-id/key-file fields and let the page's own submit path
+  // run. The real GitHub-App-validation relay endpoint still gets called;
+  // the demo's mock client is what makes it succeed, so the frame's own
+  // machinery advances normally instead of being bypassed.
+  function addShortcut() {
+    var frame = document.getElementById("frame-github-app");
+    if (!frame) return;
+    var body = frame.querySelector(".frame-body");
+    if (!body) return;
+
+    var button = document.createElement("button");
+    button.id = "demoUseCredentials";
+    button.type = "button";
+    button.textContent =
+      lang() === "he"
+        ? "השתמש בפרטי דמו"
+        : "Use demo credentials";
+    button.style.cssText = "margin-bottom:.75rem;font-weight:600";
+
+    // The private key field is a FILE input (accept=".pem"), not a text box:
+    // assigning .value to it is forbidden by every browser. A DataTransfer
+    // is the supported way to hand it a synthetic file, and the change event
+    // must be dispatched explicitly because assigning .files fires none.
+    button.addEventListener("click", function () {
+      var appId = document.getElementById("github-app-id-input");
+      var keyFile = document.getElementById("github-app-key-file-input");
+      if (appId) appId.value = DEMO_APP_ID;
+      if (keyFile) {
+        var transfer = new DataTransfer();
+        transfer.items.add(
+          new File([DEMO_PEM_BODY], "demo-app.pem", {
+            type: "application/x-pem-file"
+          })
+        );
+        keyFile.files = transfer.files;
+        keyFile.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+      // Every button on this page is type="button"; there is no submit.
+      var submit = document.getElementById("github-app-validate-submit");
+      if (submit) submit.click();
+    });
+
+    body.prepend(button);
+  }
+
+  function chosenProvider() {
+    var checked = document.querySelector(
+      'input[name="llm-provider-choice"]:checked'
+    );
+    return checked ? checked.value : null;
+  }
+
+  function wireServiceLink() {
+    // finishRenderDeploy() sets this href to the created service's URL, which
+    // demo/render_client.py returns as the bot demo. Append the reader's
+    // provider choice so the review they land on reports it.
+    var observer = new MutationObserver(function () {
+      var link = document.getElementById("render-deploy-service-link");
+      if (!link || !link.href || link.dataset.demoWired) return;
+      var provider = chosenProvider();
+      if (provider) {
+        link.href =
+          link.href + (link.href.indexOf("?") === -1 ? "?" : "&") +
+          "provider=" + encodeURIComponent(provider);
+      }
+      link.dataset.demoWired = "1";
+    });
+    observer.observe(document.body, { attributes: true, childList: true, subtree: true });
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     addBanner();
     apply();
+    addShortcut();
+    wireServiceLink();
     // applyLanguage() rewrites every [data-i18n] node, restoring the
     // hardcoded numbers, so renumber again after a language switch.
     document.addEventListener("click", function (event) {
