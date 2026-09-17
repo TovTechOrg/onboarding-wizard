@@ -195,7 +195,25 @@ def test_a_cookie_blocked_browser_is_not_bounced(browser, demo_app_url):
     blocks below drive a real credential through this blocked context and
     then reload it, proving a genuine, persistent, server-side session is
     live for a browser that stores no cookie at all -- not just "didn't
-    crash."""
+    crash."
+
+    What the `document.cookie` shim below actually proves is narrower than
+    it looks: Chromium still stores the real `HttpOnly` session cookie the
+    server sets regardless of the shim (an `HttpOnly` cookie is invisible
+    to `document.cookie` reads/writes by design, but the browser's own
+    cookie jar -- which is what a *request* actually sends -- is untouched
+    by overriding the `document.cookie` JS property). The shim is
+    decorative context for why a real cookie-blocked visitor's browser
+    behaves this way, not the mechanism this test depends on. What
+    actually matters, and what makes this test meaningful rather than
+    vacuous, is that `demo/app.py`'s
+    `_cookieless_visitors_share_one_session` middleware pins any visitor
+    who arrives with no session cookie on their *first* request to one
+    shared synthetic session, in the request scope, before router.py ever
+    reads a cookie -- so even a context that in reality still lets
+    Chromium set/send its own real cookie exercises the fallback path
+    here, because it never GOT one in the first place at page-load time.
+    """
     context = browser.new_context()
     context.add_init_script(
         "Object.defineProperty(document, 'cookie', "
@@ -253,6 +271,68 @@ def test_the_github_shortcut_advances_the_frame(page, demo_app_url):
 
     page.click("#demoUseCredentials")
     page.wait_for_selector("#frame-github-app[data-status='done']", timeout=10_000)
+
+
+def test_auto_drive_fires_again_after_a_render_key_change(page, demo_app_url):
+    """Reproduces the reviewer's live-browser finding on commit d14a192:
+    autoCreateRenderService()'s one-shot `triggered` latch never reset, so
+    "Change"-ing render-key and resubmitting the key left render-service
+    (and therefore github-app) permanently dead-ended after the first
+    successful run -- the demo could never recover without a full page
+    reload / "Start over". This drives the exact sequence: complete
+    render-key once (auto-drive fires, github-app unlocks), redo render-key
+    via its real "Change" control's own action (relocks render-service,
+    which flips its data-locked attribute back to "true" -- demo.js must
+    reset its latch on that flip), resubmit the key, and confirm the
+    auto-drive fires a SECOND time so github-app unlocks again instead of
+    staying locked forever.
+
+    Invoked via `beginChange('render-key')` (the exact function
+    static/index.html's real `.frame-change` button calls,
+    `attachChangeButtons()` -> `beginChange(btn.dataset.frame)`) rather than
+    clicking the button, matching this repo's own established pattern for
+    driving a frame redo in a browser test
+    (tests/test_onboarding_page_browser.py's
+    test_changing_an_earlier_frame_clears_the_persisted_deploy_state uses
+    the same `page.evaluate("beginChange(...)")` call). This sidesteps a
+    real but unrelated race in the page's own hinge-animation machinery: a
+    completed frame's 600ms closing animation can still be in flight when
+    this test's mocked, near-instant round trips reach the next assertion,
+    and a raw button click lands squarely inside that -- a timing hazard in
+    the page's animation code, not the `triggered`-latch bug this test
+    exists to catch.
+    """
+    page.goto(demo_app_url)
+    page.wait_for_selector("#demoBanner")
+
+    # First pass: render-key -> auto-driven render-service -> github-app.
+    page.fill("#render-key-input", "demo-key")
+    page.click("#render-key-submit")
+    page.wait_for_selector("#frame-github-app:not([data-locked='true'])", timeout=10_000)
+    page.wait_for_selector("#frame-render-key[data-status='done']", timeout=10_000)
+
+    # Let render-key's own 600ms hinge-close animation (started the instant
+    # it completed, well before this test's mocked/near-instant round trips
+    # get here) actually finish before redoing it -- redoing mid-animation
+    # races the page's own animation code (a real but separate, pre-existing
+    # timing hazard in the hinge machinery, not the `triggered`-latch bug
+    # this test targets) and can leave the frame's `open` attribute
+    # (independent of `data-locked`) toggled false by a stale animation
+    # callback that fires after the redo.
+    page.wait_for_timeout(700)
+
+    # Redo render-key -- relocks its real dependents, including the hidden
+    # render-service frame (relockDownstreamOf), which is what flips
+    # render-service's data-locked attribute back to "true": the exact
+    # transition the fix resets the latch on.
+    page.evaluate("beginChange('render-key')")
+    page.wait_for_selector("#frame-github-app[data-locked='true']", timeout=10_000)
+
+    # Second pass: resubmitting the key must drive render-service through
+    # its auto-create flow again, unlocking github-app a second time.
+    page.fill("#render-key-input", "demo-key-2")
+    page.click("#render-key-submit")
+    page.wait_for_selector("#frame-github-app:not([data-locked='true'])", timeout=10_000)
 
 
 def test_banner_survives_a_language_switch(page, demo_app_url):

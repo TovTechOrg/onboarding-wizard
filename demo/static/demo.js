@@ -126,8 +126,15 @@
     if (!frame) return;
     var triggered = false;
     function maybeTrigger() {
+      if (frame.getAttribute("data-locked") === "true") {
+        // The frame can legitimately relock (e.g. "Change" on render-key
+        // via beginChange -> relockDownstreamOf -> lockFrame). Reset the
+        // latch so a later unlock auto-drives again instead of dead-ending
+        // the demo permanently.
+        triggered = false;
+        return;
+      }
       if (triggered) return;
-      if (frame.getAttribute("data-locked") === "true") return;
       triggered = true;
       if (typeof prefillRenderServiceDefaults === "function") prefillRenderServiceDefaults();
       if (typeof createRenderService === "function") createRenderService();

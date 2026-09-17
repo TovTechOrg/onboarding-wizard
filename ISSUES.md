@@ -329,6 +329,12 @@ accidentally exercise the refusal path instead of the real one._
 - **Why parked:** No fix applied — flagging so a future test-ordering change or CI config change doesn't reintroduce this as a mystery flake.
 - **Follow-up:** If ever addressed, either give `demo.app` its own `FastAPI()` instance rebuilt fresh per test (losing the "reuse main.app's RequestValidationError handler" property this repo deliberately relies on, so not free) or isolate every demo-importing test module into its own pytest-xdist group so it never shares a worker process with a test that serves a request against `main.app` first.
 
+### Four `tests/test_onboarding_page_browser.py` tests fail only under non-default `-n0` pytest scheduling
+- **Found during:** Task 9 review (commit d14a192), `docs/superpowers/plans/2026-09-17-demo-wizard.md`.
+- **What:** A reviewer bisected and confirmed live: `test_uptime_pinger_blocked_state_reflects_render_service_url_presence`, `test_restore_from_session_resumes_polling_for_a_supabase_project_without_a_connection_string`, `test_project_status_insufficient_permissions_reverts_to_connect_section`, and `test_connection_info_insufficient_permissions_reverts_to_connect_section` all fail when run under `-n0` (single-process, serial) but pass under this repo's default/documented invocation, `-n 4 --dist=loadgroup`. Re-running at `-n0` with `--ignore=tests/test_demo_end_to_end.py` reproduced the identical 4 failures, ruling out any interaction with that file's fixtures.
+- **Why parked:** Pre-existing and unrelated to Task 9's own changes (the demo.js `triggered`-latch fix and its accompanying browser test); the repo's documented/CI invocation is green and stable. Not investigated further in-session — flagging so this ordering/isolation dependency isn't lost or mistaken for a fresh regression later.
+- **Follow-up:** If ever investigated, start from what changes between `-n 4 --dist=loadgroup` and `-n0` for these four tests specifically (likely shared browser/session/module-level state that xdist's worker-per-group isolation happens to keep apart but a single serial process does not) — same general shape as the "Demo-app-importing test modules can crash under non-default pytest scheduling" entry above, though not confirmed to share a root cause.
+
 ---
 
 ## Design Gaps
