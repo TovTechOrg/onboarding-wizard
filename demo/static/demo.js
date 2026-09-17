@@ -206,44 +206,11 @@
     observer.observe(document.body, { attributes: true, childList: true, subtree: true });
   }
 
-  // Was `position: fixed; bottom: 1rem` -- floating independently of
-  // document flow, it sat on top of whatever frame content happened to be
-  // at that fixed viewport position (confirmed via elementFromPoint/
-  // elementsFromPoint: a validated frame's collapsed detail line, e.g.
-  // "-- account: bot-demo", at every mobile width from 390 down to 320px,
-  // in both LTR and RTL). Adding bottom padding to `main` can't fix this:
-  // the overlap happens with whichever frame is currently laid out under
-  // that fixed point, not necessarily the last one on the page, so no
-  // amount of trailing whitespace after the final frame keeps it clear.
-  // Placing it inside `header.topbar` instead makes it a normal in-flow
-  // sibling of the theme/language toggles -- it can never sit on top of
-  // frame content again, and it inherits the topbar's own sticky-below-the-
-  // banner fix above for free.
-  function addStartOver() {
-    var header = document.querySelector("header.topbar");
-    var link = document.createElement("button");
-    link.id = "demoStartOver";
-    link.type = "button";
-    link.className = "control";
-    link.textContent = lang() === "he"
-      ? "התחל מחדש"
-      : "Start over";
-    link.style.cssText = "font-size:.85rem";
-    link.addEventListener("click", function () {
-      fetch("/api/session/reset", { method: "POST" }).then(function () {
-        location.href = location.pathname;
-      });
-    });
-    if (header) header.appendChild(link);
-    else document.body.appendChild(link);
-  }
-
   document.addEventListener("DOMContentLoaded", function () {
     var bannerEl = addBanner();
     var reapplyTopbarOffset = pinTopbarBelowBanner(bannerEl);
     apply();
     addShortcut();
-    addStartOver();
     wireServiceLink();
     autoCreateRenderService();
     // applyLanguage() rewrites every [data-i18n] node, restoring the

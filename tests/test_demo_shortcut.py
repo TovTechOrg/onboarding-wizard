@@ -17,8 +17,3 @@ def test_shortcut_fills_fields_rather_than_bypassing_the_endpoint():
 def test_service_link_carries_the_chosen_provider():
     assert "render-deploy-service-link" in DEMO_JS
     assert "provider=" in DEMO_JS
-
-
-def test_start_over_control_is_wired_to_the_reset_endpoint():
-    assert "demoStartOver" in DEMO_JS
-    assert '"/api/session/reset"' in DEMO_JS.split("demoStartOver")[1][:800]
