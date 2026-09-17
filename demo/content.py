@@ -23,7 +23,20 @@ DEMO_VERTEX_PROJECT = "bot-demo-project"
 # How many polls the deploy reports in_progress before going live. This is
 # the provisioning animation: the real polling UI, driven by a mock that
 # takes a few seconds, rather than a fake animation written from scratch.
-DEPLOY_POLLS_BEFORE_LIVE = 3
+# Paired with DEMO_RENDER_DEPLOY_POLL_INTERVAL_MS below: 1 poll before live,
+# at that interval, is what actually bounds the total wait a reader sees.
+DEPLOY_POLLS_BEFORE_LIVE = 1
+
+# static/index.html's own RENDER_DEPLOY_POLL_INTERVAL_MS (10000, a real
+# Render deploy's own sane check cadence) is shared, byte-for-byte, with the
+# real wizard -- demo/app.py's _inject_demo_script rewrites this one literal
+# in the SERVED page only (never the checked-in file) to this much shorter
+# value, since nothing here is a real deploy and a reader shouldn't wait on
+# a cadence chosen for one. 2000ms x DEPLOY_POLLS_BEFORE_LIVE=1 poll before
+# live means "Finish & Deploy" reaches its dashboard link in ~2s total,
+# fixing a reported "takes too long" complaint (was ~30-40s at the old
+# 3-poll/10s-interval pairing).
+DEMO_RENDER_DEPLOY_POLL_INTERVAL_MS = 2000
 
 GEMINI_MODELS = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-2.5-pro"]
 GROQ_MODELS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]

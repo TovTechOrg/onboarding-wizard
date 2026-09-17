@@ -21,6 +21,33 @@ async def test_demo_script_is_served_and_injected(demo_env):
     assert '<script src="/static/demo.js"' in page.text
 
 
+async def test_the_deploy_poll_interval_is_shortened_in_the_served_page(demo_env):
+    """2026-09-17: static/index.html's own RENDER_DEPLOY_POLL_INTERVAL_MS
+    (10000ms) is a real Render deploy's own sane check cadence, shared
+    byte-for-byte with the real wizard -- a reader shouldn't wait on that
+    cadence for a mock that resolves instantly, so demo/app.py rewrites
+    this one literal in the served page only. The checked-in file itself
+    must stay untouched (see test_the_real_pages_fetch_calls_are_untouched's
+    own docstring for why that constraint matters)."""
+    from pathlib import Path
+
+    from demo.app import app
+    from demo.content import DEMO_RENDER_DEPLOY_POLL_INTERVAL_MS
+
+    source = (Path(__file__).parent.parent / "static" / "index.html").read_text()
+    assert "const RENDER_DEPLOY_POLL_INTERVAL_MS = 10000;" in source
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        page = await client.get("/")
+
+    assert (
+        f"const RENDER_DEPLOY_POLL_INTERVAL_MS = {DEMO_RENDER_DEPLOY_POLL_INTERVAL_MS};"
+        in page.text
+    )
+    assert "const RENDER_DEPLOY_POLL_INTERVAL_MS = 10000;" not in page.text
+
+
 async def test_the_real_pages_fetch_calls_are_untouched(demo_env):
     """tests/test_onboarding_page.py pins one fetch per credential endpoint.
     The demo trims the flow by mocking the backend, never by editing fetches."""

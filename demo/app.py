@@ -27,6 +27,7 @@ from demo import render_client as demo_render_client
 from demo import session_store as demo_session_store
 from demo import supabase_client as demo_supabase_client
 from demo import uptimerobot_client as demo_uptimerobot_client
+from demo.content import DEMO_RENDER_DEPLOY_POLL_INTERVAL_MS
 
 _PAIRS = (
     (real_session_store, demo_session_store),
@@ -174,6 +175,15 @@ async def _inject_demo_script(request, call_next):
     full reasoning (why this needs to happen HERE, on `/`, and why a
     cheaper "just check for a cookie" fix doesn't work for this demo
     specifically).
+
+    Also rewrites RENDER_DEPLOY_POLL_INTERVAL_MS's one literal in the
+    served page (2026-09-17) -- static/index.html's own value (10000ms) is
+    a real Render deploy's own sane check cadence, shared byte-for-byte
+    with the real wizard, but a reported "Finish & Deploy takes too long"
+    complaint traced back to this demo waiting on that same real-world
+    cadence for a mock that resolves instantly. Rewriting the SERVED page
+    only, never the checked-in file, keeps this the same "index.html is
+    left byte-identical" shape as the script-tag/CSP rewrites above.
     """
     response = await call_next(request)
     if request.url.path != "/" or response.status_code != 200:
@@ -181,6 +191,11 @@ async def _inject_demo_script(request, call_next):
 
     body = b"".join([chunk async for chunk in response.body_iterator])
     html = body.decode("utf-8").replace("</body>", f"{_SCRIPT_TAG}</body>", 1)
+    html = html.replace(
+        "const RENDER_DEPLOY_POLL_INTERVAL_MS = 10000;",
+        f"const RENDER_DEPLOY_POLL_INTERVAL_MS = {DEMO_RENDER_DEPLOY_POLL_INTERVAL_MS};",
+        1,
+    )
     headers = {
         k: v for k, v in response.headers.items() if k.lower() != "content-length"
     }
