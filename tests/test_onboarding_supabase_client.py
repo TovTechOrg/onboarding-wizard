@@ -63,7 +63,7 @@ async def test_unauthorized_key_is_invalid():
 async def test_classic_token_still_reaches_the_network_and_can_validate():
     """Scoped PATs are Supabase's own recommended choice for automation, but
     are in gradual/alpha rollout (not every account has the option to
-    create one yet -- see CLAUDE.md's sub-project 3 section), so a Classic
+    create one yet -- see docs/subprojects/supabase.md), so a Classic
     token (no `sbp_fc` prefix) must still be accepted rather than hard
     -rejected. There is no prefix gate at all -- any token that Supabase's
     own API accepts is valid here."""

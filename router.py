@@ -116,7 +116,7 @@ class SupabaseKeyRequest(BaseModel):
     # True only for the error-recovery resubmission (a new token after a
     # permission gap) -- merges api_key into the frame instead of the
     # default full replace, so an already-created project's ref/db_pass
-    # survive the token swap. See CLAUDE.md's sub-project 3 section.
+    # survive the token swap. See docs/subprojects/supabase.md.
     preserve_project: bool = False
 
 
@@ -730,7 +730,7 @@ async def create_supabase_project(payload: SupabaseCreateProjectRequest, request
     # Checked before ever attempting to create: the error-recovery flow can
     # resubmit the same org/name after swapping tokens (preserve_project),
     # and must never re-provision a second project for what's really just a
-    # permission retry. See CLAUDE.md's sub-project 3 section.
+    # permission retry. See docs/subprojects/supabase.md.
     existing = await supabase_client.find_org_project_by_name(
         supabase_frame["api_key"], payload.organization_slug, payload.name
     )

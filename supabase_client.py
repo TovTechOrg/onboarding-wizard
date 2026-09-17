@@ -60,7 +60,7 @@ async def validate_key(pat: str) -> SupabaseKeyValidation:
     scoped/fine-grained tokens are its own recommended choice for
     automation, but are in gradual/alpha rollout (not every account has the
     option to create one yet), so this never gates on token shape; see
-    CLAUDE.md's sub-project 3 section."""
+    docs/subprojects/supabase.md."""
     try:
         async with httpx.AsyncClient(base_url=SUPABASE_API_BASE, timeout=15.0) as client:
             response = await client.get(
