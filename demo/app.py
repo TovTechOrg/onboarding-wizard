@@ -346,4 +346,24 @@ async def _cookieless_visitors_share_one_session(request, call_next):
     return await call_next(request)
 
 
+# The launcher page (in the sibling repo, at
+# https://tovtechorg.github.io/pr-review-bot/demo/) polls this service's
+# /healthz to know when a cold start has finished. That is a cross-origin
+# read, so the response needs an explicit allow header or the browser hands
+# the launcher an opaque failure indistinguishable from "still booting".
+#
+# Scoped to /healthz by path, with no Access-Control-Allow-Credentials, so no
+# session cookie ever rides on it and no other route becomes readable from
+# another origin.
+LAUNCHER_ORIGIN = "https://tovtechorg.github.io"
+
+
+@app.middleware("http")
+async def _allow_launcher_health_polling(request, call_next):
+    response = await call_next(request)
+    if request.url.path == "/healthz":
+        response.headers["access-control-allow-origin"] = LAUNCHER_ORIGIN
+    return response
+
+
 __all__ = ["app", "install_mocks"]

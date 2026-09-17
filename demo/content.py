@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 # Where "Finish & Deploy" sends the reader: the already-deployed bot demo.
-# Overridden per-deployment by the DEMO_BOT_URL env var so the two demo
-# services can be pointed at each other without a rebuild.
+# The hostname is the deployed service's real slug (demo-pr-review-BOT, not
+# -engine -- corrected 2026-09-17 after the service was created and the old
+# value was found to point at a hostname that never existed). Baked in rather
+# than configured per-deployment, per the design's "no env-var configuration
+# to get wrong" argument; DEMO_BOT_URL remains available as an override.
 import os
 
 DEMO_BOT_URL = os.environ.get(
-    "DEMO_BOT_URL", "https://demo-pr-review-engine.onrender.com"
+    "DEMO_BOT_URL", "https://demo-pr-review-bot.onrender.com"
 )
 
 DEMO_SERVICE_ID = "srv-demo000000000000"
