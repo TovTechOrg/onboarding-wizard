@@ -254,15 +254,37 @@ def _restore_real_clients_after_demo_app_import():
     in test_demo_app_boot.py) because the mocks it depends on had already
     been un-installed by test 1's teardown. Module scope matches the actual
     lifetime of the thing being guarded (once per module import, not once
-    per test). Snapshotting four modules' __dict__ per module is a handful
+    per test). Snapshotting these modules' __dict__ per module is a handful
     of cheap dict copies, negligible next to this suite's Postgres/browser
-    fixtures, whether or not that module ever touches `demo.app` at all."""
+    fixtures, whether or not that module ever touches `demo.app` at all.
+
+    `supabase_client` and `uptimerobot_client` were added alongside
+    `router` (2026-09-17 final-review fix wave): demo/app.py's `_PAIRS` now
+    also mocks those two clients (closing the C3 finding -- a real
+    api.uptimerobot.com call fired from "Change"-ing render-key), and
+    demo/app.py separately rebinds `router._seed_provider_config` itself
+    (it has no paired module -- see demo/app.py's own comment) to a no-op
+    success stub, closing the C1 finding (a real, unreachable psycopg
+    connection broke Finish & Deploy for every demo visitor). Both are
+    real, permanent module-global mutations exactly like the original
+    four, and tests/test_onboarding_router.py's own
+    `test_seed_provider_config_*` tests call `router._seed_provider_config`
+    directly against a real Postgres test DB with no monkeypatch of their
+    own -- without restoring `router` here too, a demo test module running
+    earlier in the same xdist worker would leave those tests silently
+    exercising the mock instead of the real function."""
     import github_client
     import llm_client
     import render_client
+    import router
     import session_store
+    import supabase_client
+    import uptimerobot_client
 
-    modules = (session_store, render_client, github_client, llm_client)
+    modules = (
+        session_store, render_client, github_client, llm_client,
+        supabase_client, uptimerobot_client, router,
+    )
     snapshots = [dict(vars(m)) for m in modules]
     yield
     for module, snapshot in zip(modules, snapshots):

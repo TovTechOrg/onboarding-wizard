@@ -27,3 +27,20 @@ DEPLOY_POLLS_BEFORE_LIVE = 3
 GEMINI_MODELS = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-2.5-pro"]
 GROQ_MODELS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
 VERTEX_MODELS = ["gemini-flash-latest", "gemini-2.5-flash"]
+
+# demo/supabase_client.py's fixed success values -- the supabase frame is
+# pre-seeded complete (demo/session_store.py's _PRESEEDED_FRAMES) and never
+# driven through the browser, but these back the mock's return values for
+# any endpoint reached directly (defense in depth, see CLAUDE.md's C3
+# finding and its "mock every client router.py can call" generalization).
+DEMO_SUPABASE_ORG_SLUG = "demo-org"
+DEMO_SUPABASE_ORG_NAME = "Demo Organization"
+DEMO_SUPABASE_PROJECT_REF = "demo-ref"
+DEMO_SUPABASE_STATUS = "ACTIVE_HEALTHY"
+DEMO_SUPABASE_DB_HOST = "db.demo-ref.supabase.co"
+DEMO_SUPABASE_DB_USER = "postgres"
+DEMO_SUPABASE_DB_NAME = "postgres"
+DEMO_SUPABASE_DB_PORT = 5432
+
+# demo/uptimerobot_client.py's fixed success value.
+DEMO_UPTIME_MONITOR_ID = 900001

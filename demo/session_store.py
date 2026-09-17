@@ -67,6 +67,14 @@ def close_pool() -> None:
 
 
 def create_session() -> str:
+    """Sweeps expired sessions before inserting -- mirrors the real
+    session_store.create_session()'s own "sweeps expired rows before
+    inserting" behavior (see its docstring), so a public, unbounded-uptime
+    demo process doesn't grow its in-memory `_sessions` dict forever (see
+    this module's own docstring, "swept" note). Found unwired during the
+    2026-09-17 final-review pass (I3): `sweep()` existed and was tested in
+    isolation but nothing outside its own test ever called it."""
+    sweep()
     session_id = secrets.token_urlsafe(32)
     _sessions[session_id] = {k: dict(v) for k, v in _PRESEEDED_FRAMES.items()}
     _created_at[session_id] = time.monotonic()
@@ -79,6 +87,15 @@ def adopt_session(session_id: str) -> None:
     create_session() mints its own id and is the only such path in the real
     store; the cookie-hostile fallback needs a *known* id, so this is a
     separate, clearly-named function rather than a widened create_session().
+
+    Does NOT sweep first, unlike create_session() above -- this is called
+    from _cookieless_visitors_share_one_session on (almost) every cookie-
+    blocked request to lazily re-adopt the one shared session id if it's
+    ever missing (e.g. right after an expiry sweep elsewhere deleted it),
+    so sweeping here would just immediately undo whatever eviction made
+    this call necessary in the first place for any session younger than
+    itself, and would run this check far more often than create_session()'s
+    own one-sweep-per-new-session cadence needs.
     """
     _sessions[session_id] = {k: dict(v) for k, v in _PRESEEDED_FRAMES.items()}
     _created_at[session_id] = time.monotonic()

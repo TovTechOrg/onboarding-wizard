@@ -192,9 +192,25 @@
     // finishRenderDeploy() sets this href to the created service's URL, which
     // demo/render_client.py returns as the bot demo. Append the reader's
     // provider choice so the review they land on reports it.
+    //
+    // Found during 2026-09-17 final-review manual verification (C1):
+    // static/index.html's own markup gives this anchor a default
+    // href="#" -- `link.href` (the resolved PROPERTY, not the raw
+    // attribute) is a full absolute URL string for that ("http://host/#"),
+    // which is always truthy, so the very first mutation this observer
+    // ever sees (page load, well before finishRenderDeploy() runs) used to
+    // satisfy `!link.href` as false and wire (and permanently
+    // dataset.demoWired-latch) the "#" placeholder instead of waiting for
+    // the real URL -- the final href was the correct bot-demo URL but
+    // silently missing "?provider=...", since finishRenderDeploy()
+    // overwrites .href wholesale afterward and this observer never got a
+    // second chance (already latched). Checking the RAW attribute instead
+    // of the resolved property is what actually detects "still the
+    // placeholder, not yet set for real".
     var observer = new MutationObserver(function () {
       var link = document.getElementById("render-deploy-service-link");
-      if (!link || !link.href || link.dataset.demoWired) return;
+      if (!link || !link.getAttribute("href") || link.getAttribute("href") === "#" ||
+          link.dataset.demoWired) return;
       var provider = chosenProvider();
       if (provider) {
         link.href =
@@ -215,13 +231,17 @@
     autoCreateRenderService();
     // applyLanguage() rewrites every [data-i18n] node, restoring the
     // hardcoded numbers, so renumber again after a language switch. The
-    // banner's own text also swaps (EN/HE differ in length/line count), so
-    // the topbar's sticky offset -- measured off the banner's live height
-    // -- is recomputed too, not just assumed to be unchanged.
+    // banner itself is not a [data-i18n] node (addBanner() sets its
+    // textContent directly, once, at page load -- see below), so
+    // applyLanguage() never touches it on its own; re-set it here too.
+    // The banner's own text also swaps (EN/HE differ in length/line
+    // count), so the topbar's sticky offset -- measured off the banner's
+    // live height -- is recomputed too, not just assumed to be unchanged.
     document.addEventListener("click", function (event) {
       if (event.target.closest("[data-lang-option], #langToggleBtn")) {
         setTimeout(function () {
           apply();
+          bannerEl.textContent = BANNER[lang()];
           reapplyTopbarOffset();
         }, 0);
       }
