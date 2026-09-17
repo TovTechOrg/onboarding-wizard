@@ -73,6 +73,17 @@ def create_session() -> str:
     return session_id
 
 
+def adopt_session(session_id: str) -> None:
+    """Demo-only: create a session under a caller-chosen id.
+
+    create_session() mints its own id and is the only such path in the real
+    store; the cookie-hostile fallback needs a *known* id, so this is a
+    separate, clearly-named function rather than a widened create_session().
+    """
+    _sessions[session_id] = {k: dict(v) for k, v in _PRESEEDED_FRAMES.items()}
+    _created_at[session_id] = time.monotonic()
+
+
 def get_session(session_id: str) -> SessionData | None:
     frames = _sessions.get(session_id)
     if frames is None:

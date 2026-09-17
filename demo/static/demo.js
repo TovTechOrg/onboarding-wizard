@@ -131,10 +131,28 @@
     observer.observe(document.body, { attributes: true, childList: true, subtree: true });
   }
 
+  function addStartOver() {
+    var link = document.createElement("button");
+    link.id = "demoStartOver";
+    link.type = "button";
+    link.textContent = lang() === "he"
+      ? "התחל מחדש"
+      : "Start over";
+    link.style.cssText =
+      "position:fixed;bottom:1rem;inset-inline-end:1rem;z-index:60;font-size:.85rem";
+    link.addEventListener("click", function () {
+      fetch("/api/session/reset", { method: "POST" }).then(function () {
+        location.href = location.pathname;
+      });
+    });
+    document.body.appendChild(link);
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     addBanner();
     apply();
     addShortcut();
+    addStartOver();
     wireServiceLink();
     // applyLanguage() rewrites every [data-i18n] node, restoring the
     // hardcoded numbers, so renumber again after a language switch.
