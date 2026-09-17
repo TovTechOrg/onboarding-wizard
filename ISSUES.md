@@ -317,6 +317,18 @@ accidentally exercise the refusal path instead of the real one._
 - **Status:** open, same as the sibling repo's copy of this issue — no `SessionEnd` sweep exists in either repo yet.
 - **Follow-up:** Evaluate a `SessionEnd` hook sweeping the directory unconditionally, in step with whatever `pr-review-bot` settles on for its own copy (the two should stay in sync, same as the rest of these hook files).
 
+### Cross-visitor "Start over" resets the one shared cookieless session
+- **Found during:** Task 7 review (commit 44f0c48), `docs/superpowers/plans/2026-09-17-demo-wizard.md`.
+- **What:** A reviewer verified live: every cookie-blocked visitor (LinkedIn's in-app browser, private modes) shares one synthetic session (`_SHARED_DEMO_SESSION` in `demo/app.py`); when any one of them clicks "Start over," `POST /api/session/reset` deletes that shared session for everyone currently on it, so another concurrent cookieless visitor's progress silently resets mid-flow.
+- **Why parked:** Accepted as a documented limitation, not fixed — every value behind this demo is synthetic and disposable, the audience is a launch-window readership where simultaneous cookieless collisions are rare and low-harm, and real per-visitor isolation for cookieless visitors would need a fingerprinting mechanism disproportionate to a demo's stakes.
+- **Follow-up:** None planned; revisit only if this demo sees enough concurrent cookieless traffic for the collision to actually surface.
+
+### Demo-app-importing test modules can crash under non-default pytest scheduling
+- **Found during:** Task 7 review (commit 44f0c48), `docs/superpowers/plans/2026-09-17-demo-wizard.md`.
+- **What:** A reviewer reproduced: `main.app`'s middleware stack freezes after it serves its first request; if any test imports `demo.app` (which adds middleware to the literal same `main.app` object) AFTER some other test has already caused `main.app` to serve a request in the same worker process, it crashes with `RuntimeError: Cannot add middleware after an application has started`. Currently green only because this project's default `-n 4 --dist=loadgroup` pytest invocation happens to avoid the bad ordering; reproduced deterministically with `-n 0` and a specific file order. This is pre-existing since Task 5 (not introduced by Task 7), and grows more exposed as more demo-importing test files are added (Task 9 will add a 5th).
+- **Why parked:** No fix applied — flagging so a future test-ordering change or CI config change doesn't reintroduce this as a mystery flake.
+- **Follow-up:** If ever addressed, either give `demo.app` its own `FastAPI()` instance rebuilt fresh per test (losing the "reuse main.app's RequestValidationError handler" property this repo deliberately relies on, so not free) or isolate every demo-importing test module into its own pytest-xdist group so it never shares a worker process with a test that serves a request against `main.app` first.
+
 ---
 
 ## Design Gaps

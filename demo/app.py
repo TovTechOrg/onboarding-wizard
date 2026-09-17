@@ -118,7 +118,11 @@ async def _cookieless_visitors_share_one_session(request, call_next):
     their own session untouched.
 
     Guarded on `real_session_store.get_session` still being the demo's own
-    mock (not the real, Postgres-backed one) -- load-bearing for the TEST
+    mock (not the real, Postgres-backed one), checked by object identity
+    against `demo_session_store.get_session` rather than a string
+    comparison against `__module__` -- a rename or re-export of
+    `demo/session_store.py` can't silently make this check permanently
+    inert the way a string literal could -- load-bearing for the TEST
     process, not production. `main.app` is reused unchanged (see this
     module's own docstring), so this middleware, once added by this
     module's first import in a given process, stays attached to that same
@@ -140,7 +144,7 @@ async def _cookieless_visitors_share_one_session(request, call_next):
     dozen unrelated tests in the full suite that assert on `main.app`'s
     genuine cookieless behaviour.
     """
-    if real_session_store.get_session.__module__ != "demo.session_store":
+    if real_session_store.get_session is not demo_session_store.get_session:
         return await call_next(request)
 
     if SESSION_COOKIE_NAME not in request.cookies:

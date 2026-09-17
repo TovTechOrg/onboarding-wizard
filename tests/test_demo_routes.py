@@ -104,7 +104,23 @@ async def test_cookieless_visitors_share_a_genuinely_functioning_session(demo_en
     status -- it proves the injected cookie header is genuinely observed by
     downstream router.py code, not just by our own middleware's request
     object (the functools.cached_property staleness trap named in the task
-    brief)."""
+    brief).
+
+    On what actually makes this client "cookieless": httpx's AsyncClient
+    keeps a real cookie jar even with cookies=None (that only sets the
+    jar's starting contents to empty, it doesn't disable storing/sending
+    cookies). This test passes because router.py's session cookie is set
+    Secure=True (`_set_session_cookie` in router.py) while this test's
+    base_url is plain http://test -- the jar's own secure-cookie policy
+    refuses to store or resend a Secure cookie over a non-https origin, so
+    the second request genuinely arrives with none. That is an accident of
+    this test's chosen base_url, not something this test previously
+    verified was still true, so a future change to base_url (e.g. to
+    "https://test") could silently turn this into a same-session round trip
+    while the test kept passing. The assertions below pin the actual
+    mechanism directly: no Set-Cookie header was ever sent to this client,
+    and the client's own jar stays empty throughout.
+    """
     from demo.app import app
 
     transport = ASGITransport(app=app)
@@ -115,10 +131,13 @@ async def test_cookieless_visitors_share_a_genuinely_functioning_session(demo_en
         )
         assert validate.status_code == 200
         assert validate.json()["valid"] is True
+        assert "set-cookie" not in {k.lower() for k in validate.headers}
+        assert len(client.cookies) == 0
 
-        # A second, independent cookieless request (this client sends no
-        # cookies at all -- cookies=None -- so this genuinely simulates a
-        # second cookie-blocked page load, not a resumed browser session).
+        # A second, independent cookieless request -- confirmed above that
+        # the client never received nor stored a session cookie, so this
+        # genuinely simulates a second cookie-blocked page load, not a
+        # resumed browser session.
         state = await client.get("/api/session")
 
     assert state.json()["frames"].get("render-key", {}).get("complete") is True
