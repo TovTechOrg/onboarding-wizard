@@ -53,6 +53,24 @@ class Settings(BaseSettings):
     # settings mechanism for its own copy of this same URL.
     demo_bot_url: str = "https://demo-pr-review-bot.onrender.com"
 
+    # The path the launcher (sibling pr-review-bot repo's
+    # guide/demo/index.html, served from GitHub Pages) cross-origin-polls to
+    # learn this service has finished waking, when ?to= routes a reader here
+    # instead of to the bot demo. Deliberately NOT "/healthz" -- that
+    # endpoint is also this service's own configured Render health check and
+    # what main.py/tests hit directly, so it must never go dark. This is a
+    # second, narrowly-scoped endpoint (demo/app.py) that answers
+    # identically, purely so the launcher's own repeated poll has a path name
+    # of its own. Real-world reason: an ad-blocker/privacy extension's filter
+    # list blocked a literal "/healthz" fetch client-side
+    # (net::ERR_BLOCKED_BY_CLIENT, 2026-09-17) even though the service was
+    # healthy and reachable to anyone without that extension. Must match the
+    # literal hardcoded in the sibling repo's guide/demo/index.html and the
+    # same-named setting in that repo's own config.py (this service's own
+    # copy of demo_bot_url above already carries the same "kept in sync by
+    # hand across repos" caveat).
+    demo_launcher_ping_path: str = "/api/demo/ping-7f3a2"
+
     @field_validator("database_url")
     @classmethod
     def _normalize_database_url(cls, value: str) -> str:

@@ -7,6 +7,8 @@ import logging
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from config import settings
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -14,6 +16,16 @@ _ALLOWED_STEPS = {
     "wizard_start", "render_key_done", "github_app_done",
     "provider_done", "deploy_done", "handoff_clicked",
 }
+
+
+# See config.py's demo_launcher_ping_path field comment for why this exists
+# as a second endpoint rather than reusing "/healthz" (main.py) -- same
+# trivial body, but the sibling repo's launcher's own cross-origin poll is
+# the only caller.
+@router.get(settings.demo_launcher_ping_path)
+@router.head(settings.demo_launcher_ping_path)
+async def launcher_ping() -> dict:
+    return {"status": "ok"}
 
 
 @router.post("/api/demo/step/{name}")

@@ -53,3 +53,14 @@ def test_demo_bot_url_defaults_to_the_live_demo_host(monkeypatch):
 def test_demo_bot_url_reads_an_env_override(monkeypatch):
     monkeypatch.setenv("DEMO_BOT_URL", "https://demo-pr-review-bot-fork.onrender.com")
     assert Settings().demo_bot_url == "https://demo-pr-review-bot-fork.onrender.com"
+
+
+def test_demo_launcher_ping_path_defaults_and_is_not_healthz(monkeypatch):
+    monkeypatch.delenv("DEMO_LAUNCHER_PING_PATH", raising=False)
+    assert Settings().demo_launcher_ping_path == "/api/demo/ping-7f3a2"
+    assert Settings().demo_launcher_ping_path != "/healthz"
+
+
+def test_demo_launcher_ping_path_reads_an_env_override(monkeypatch):
+    monkeypatch.setenv("DEMO_LAUNCHER_PING_PATH", "/api/demo/ping-rotated")
+    assert Settings().demo_launcher_ping_path == "/api/demo/ping-rotated"

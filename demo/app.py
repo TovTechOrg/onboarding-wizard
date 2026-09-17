@@ -200,6 +200,7 @@ async def _inject_demo_script(request, call_next):
     return new_response
 
 
+from config import settings  # noqa: E402
 from demo.routes import router as demo_router  # noqa: E402
 from router import SESSION_COOKIE_NAME  # noqa: E402  (the wizard's own cookie name)
 
@@ -348,20 +349,24 @@ async def _cookieless_visitors_share_one_session(request, call_next):
 
 # The launcher page (in the sibling repo, at
 # https://tovtechorg.github.io/pr-review-bot/demo/) polls this service's
-# /healthz to know when a cold start has finished. That is a cross-origin
-# read, so the response needs an explicit allow header or the browser hands
-# the launcher an opaque failure indistinguishable from "still booting".
+# demo_launcher_ping_path (demo/routes.py's launcher_ping) to know when a
+# cold start has finished. That is a cross-origin read, so the response
+# needs an explicit allow header or the browser hands the launcher an opaque
+# failure indistinguishable from "still booting". NOT scoped to "/healthz"
+# (config.py's demo_launcher_ping_path field comment has the full reason: an
+# ad-blocker/privacy extension's filter list blocked that literal path
+# client-side, 2026-09-17).
 #
-# Scoped to /healthz by path, with no Access-Control-Allow-Credentials, so no
-# session cookie ever rides on it and no other route becomes readable from
-# another origin.
+# Scoped to demo_launcher_ping_path by path, with no
+# Access-Control-Allow-Credentials, so no session cookie ever rides on it and
+# no other route becomes readable from another origin.
 LAUNCHER_ORIGIN = "https://tovtechorg.github.io"
 
 
 @app.middleware("http")
 async def _allow_launcher_health_polling(request, call_next):
     response = await call_next(request)
-    if request.url.path == "/healthz":
+    if request.url.path == settings.demo_launcher_ping_path:
         response.headers["access-control-allow-origin"] = LAUNCHER_ORIGIN
     return response
 
