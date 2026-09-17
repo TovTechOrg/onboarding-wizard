@@ -4,6 +4,11 @@
 ![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)
 ![uv](https://img.shields.io/badge/package%20manager-uv-de5fe9.svg)
 
+**[See it work → live demo](https://tovtechorg.github.io/pr-review-bot/demo/)**
+— walk the wizard end to end against mocked Render, GitHub and LLM
+integrations, then watch the bot it "provisions" review a pull request. No
+credentials, nothing real is created.
+
 **[Try it →](https://onboarding-wizard-mk6m.onrender.com/)** — this repo's own live deployment.
 
 A self-service setup wizard: a visitor walks through it, in their own
