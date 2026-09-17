@@ -57,7 +57,7 @@ Fill in `.env`'s two required settings:
 Then run:
 
 ```bash
-uv run pytest -v
+uv run pytest -q
 uv run ruff check .
 ```
 

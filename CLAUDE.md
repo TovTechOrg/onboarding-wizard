@@ -123,10 +123,14 @@ for the full design.
   temporarily setting aside someone else's pre-existing uncommitted changes
   (e.g. via `git stash`), restore them **uncommitted**, exactly as found —
   committing them for tidiness is still an unrequested commit.
-- **Before pushing, always run the full test suite (`uv run pytest -v`) and
+- **Before pushing, always run the full test suite (`uv run pytest -q`) and
   ruff (`uv run ruff check .`), and fix whatever either finds.** Never push
   with a red suite or an unresolved lint error, and never skip either check
-  because a change "looks" too small to affect them.
+  because a change "looks" too small to affect them. Use `-q`, not `-v`, for
+  a routine run — pytest still prints the full traceback for any failure
+  either way; `-v`'s only effect is one extra line per *passing* test, which
+  is pure Bash-output token cost on every green run and adds nothing when
+  there's nothing to report.
 - **Before any push to `main`, always invoke the `deploy-verify` skill** —
   whether the commit reaching `main` arrived via a merge or was made
   directly, the risk this catches (a deploy image that builds/boots
