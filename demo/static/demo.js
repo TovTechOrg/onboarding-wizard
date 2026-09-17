@@ -96,50 +96,139 @@
   // kind -- demo/github_client.py never reads it.
   var DEMO_PEM_BODY =
     "-----BEGIN RSA PRIVATE KEY-----\ndemo-not-a-real-key\n-----END RSA PRIVATE KEY-----\n";
+  var DEMO_RENDER_KEY = "rnd_demo1234567890abcdef";
+  var DEMO_LLM_CREDENTIAL = "demo-llm-credential";
+  // Body of the synthetic GCP service-account JSON the Vertex file input
+  // receives. Not a real credential -- demo/llm_client.py's probe/list
+  // functions never read it (see that module's own docstring: "Listing and
+  // probing both always succeed").
+  var DEMO_VERTEX_SERVICE_ACCOUNT_JSON =
+    '{"type": "service_account", "project_id": "demo-not-a-real-project"}';
 
-  // Fill the real App-id/key-file fields and let the page's own submit path
-  // run. The real GitHub-App-validation relay endpoint still gets called;
+  // 2026-09-17: readers were being asked to type/pick real-looking values
+  // (a Render key, a GitHub App id and .pem file, an LLM credential) into a
+  // wizard that never validates any of them for real -- every credential
+  // field this demo shows is answered by a mock that succeeds unconditionally
+  // (see demo/render_client.py, demo/github_client.py, demo/llm_client.py's
+  // own docstrings). Pre-filling every one of them and making it read-only
+  // (a file input has no `readonly` -- `disabled` is the only way, so its
+  // own "Choose File" control is hidden too, since a disabled file input
+  // still LOOKS clickable otherwise) removes any doubt about what a reader
+  // needs to type versus what advancing the demo actually needs: nothing
+  // but clicking through. The one exception is the LLM provider RADIO
+  // CHOICE (and, for Vertex, its model/project/location) -- the reader's
+  // own pick there is what personalizes the review they land on afterward
+  // (wireServiceLink() below), so that stays fully interactive.
+
+  function lockTextInputReadOnly(inputEl) {
+    if (!inputEl) return;
+    inputEl.readOnly = true;
+  }
+
+  // The private key/service-account field is a FILE input, not a text box:
+  // assigning .value to it is forbidden by every browser. A DataTransfer is
+  // the supported way to hand it a synthetic file, and the change event must
+  // be dispatched explicitly because assigning .files fires none. The real
+  // validation endpoint still gets called once the reader clicks Validate --
   // the demo's mock client is what makes it succeed, so the frame's own
   // machinery advances normally instead of being bypassed.
-  function addShortcut() {
-    var frame = document.getElementById("frame-github-app");
-    if (!frame) return;
-    var body = frame.querySelector(".frame-body");
-    if (!body) return;
+  function mockAndLockFileInput(inputEl, filename, mimeType, body) {
+    if (!inputEl) return;
+    var transfer = new DataTransfer();
+    transfer.items.add(new File([body], filename, { type: mimeType }));
+    inputEl.files = transfer.files;
+    inputEl.dispatchEvent(new Event("change", { bubbles: true }));
+    inputEl.disabled = true;
+    var label = document.querySelector(
+      'label.file-field-button[for="' + inputEl.id + '"]'
+    );
+    // Not `.hidden` -- `.file-field-button`'s own class rule and `[hidden]`
+    // are equal specificity, and an author-origin rule always beats the UA
+    // stylesheet's `[hidden] { display: none }` regardless of specificity,
+    // so `.hidden` alone would silently no-op here. An inline style wins
+    // outright.
+    if (label) label.style.display = "none";
+  }
 
-    var button = document.createElement("button");
-    button.id = "demoUseCredentials";
-    button.type = "button";
-    button.textContent =
-      lang() === "he"
-        ? "השתמש בפרטי דמו"
-        : "Use demo credentials";
-    button.style.cssText = "margin-bottom:.75rem;font-weight:600";
+  function hideChangeButton(frameId) {
+    var button = document.querySelector(
+      'button.frame-change[data-frame="' + frameId + '"]'
+    );
+    // Not `.hidden` -- `details.frame[data-status="done"] .frame-change`
+    // (static/index.html) is higher specificity than `[hidden]` and would
+    // silently override it the moment the frame reaches "done", which is
+    // exactly when a visible Change button would otherwise reappear.
+    if (button) button.style.display = "none";
+  }
 
-    // The private key field is a FILE input (accept=".pem"), not a text box:
-    // assigning .value to it is forbidden by every browser. A DataTransfer
-    // is the supported way to hand it a synthetic file, and the change event
-    // must be dispatched explicitly because assigning .files fires none.
-    button.addEventListener("click", function () {
-      var appId = document.getElementById("github-app-id-input");
-      var keyFile = document.getElementById("github-app-key-file-input");
-      if (appId) appId.value = DEMO_APP_ID;
-      if (keyFile) {
-        var transfer = new DataTransfer();
-        transfer.items.add(
-          new File([DEMO_PEM_BODY], "demo-app.pem", {
-            type: "application/x-pem-file"
-          })
-        );
-        keyFile.files = transfer.files;
-        keyFile.dispatchEvent(new Event("change", { bubbles: true }));
-      }
-      // Every button on this page is type="button"; there is no submit.
-      var submit = document.getElementById("github-app-validate-submit");
-      if (submit) submit.click();
+  // validateRenderKey() (static/index.html) clears render-key-input's own
+  // value on success -- invisible in normal use, since the frame collapses
+  // to its "Validated" summary badge right afterward, but it means a
+  // one-time fill at page load doesn't survive a redo: beginChange()
+  // doesn't refill it (only dashboard-auth/github-app/supabase/llm-provider
+  // clear their own value on self-change -- see beginChange's own comment),
+  // so without this the field would sit empty and (being read-only) stuck
+  // that way. Refilling whenever the frame is unlocked (its initial state,
+  // and every state beginChange('render-key') sets) rather than once keeps
+  // it populated for as long as it's actually open/interactive; the
+  // hidden Change button below means a demo reader can never trigger a
+  // redo anyway, but this also keeps the frame correct if a future change
+  // ever un-hides it.
+  function autoFillRenderKey() {
+    var frame = document.getElementById("frame-render-key");
+    var input = document.getElementById("render-key-input");
+    if (!frame || !input) return;
+    function refill() {
+      if (frame.getAttribute("data-locked") === "true") return;
+      input.value = DEMO_RENDER_KEY;
+    }
+    lockTextInputReadOnly(input);
+    refill();
+    new MutationObserver(refill).observe(frame, {
+      attributes: true, attributeFilter: ["data-locked"]
     });
+    hideChangeButton("render-key");
+  }
 
-    body.prepend(button);
+  function autoFillGithubApp() {
+    var appId = document.getElementById("github-app-id-input");
+    if (appId) appId.value = DEMO_APP_ID;
+    lockTextInputReadOnly(appId);
+    mockAndLockFileInput(
+      document.getElementById("github-app-key-file-input"),
+      "demo-app.pem", "application/x-pem-file", DEMO_PEM_BODY
+    );
+    hideChangeButton("github-app");
+  }
+
+  // Unlike render-key/github-app above, llm-provider's own Change button
+  // stays -- the reader may genuinely want to try a different provider for
+  // their personalized review. handleLlmProviderChoice() (static/index.html,
+  // wired to these same radios' own "change" listener at script-load time,
+  // registered before this DOMContentLoaded handler runs) unconditionally
+  // clears and re-shows whichever credential control matches the newly
+  // chosen provider on EVERY choice, including a redo after Change -- so the
+  // credential auto-fill has to re-run on every such change too, not once.
+  function autoFillLlmCredentialForCurrentChoice() {
+    var checked = document.querySelector('input[name="llm-provider-choice"]:checked');
+    if (!checked) return;
+    if (checked.value === "vertex") {
+      mockAndLockFileInput(
+        document.getElementById("llm-provider-file-input"),
+        "demo-service-account.json", "application/json",
+        DEMO_VERTEX_SERVICE_ACCOUNT_JSON
+      );
+    } else {
+      var apiKeyInput = document.getElementById("llm-provider-api-key-input");
+      if (apiKeyInput) apiKeyInput.value = DEMO_LLM_CREDENTIAL;
+      lockTextInputReadOnly(apiKeyInput);
+    }
+  }
+
+  function wireLlmCredentialAutoFill() {
+    document.querySelectorAll('input[name="llm-provider-choice"]').forEach(function (radio) {
+      radio.addEventListener("change", autoFillLlmCredentialForCurrentChoice);
+    });
   }
 
   // The render-service frame is hidden (COLLAPSED_FRAMES above), but its
@@ -155,8 +244,8 @@
   // after render-key finishes) and driving its already-existing
   // prefillRenderServiceDefaults()/createRenderService() functions
   // (global, since index.html's own <script> is a classic script, not a
-  // module) reuses the real machinery exactly like addShortcut() does for
-  // github-app, rather than reimplementing the create-service call here.
+  // module) reuses the real machinery exactly like autoFillGithubApp() does
+  // for github-app, rather than reimplementing the create-service call here.
   function autoCreateRenderService() {
     var frame = document.getElementById("frame-render-service");
     if (!frame) return;
@@ -261,7 +350,9 @@
     var bannerEl = addBanner();
     var reapplyTopbarOffset = pinTopbarBelowBanner(bannerEl);
     apply();
-    addShortcut();
+    autoFillRenderKey();
+    autoFillGithubApp();
+    wireLlmCredentialAutoFill();
     wireServiceLink();
     autoCreateRenderService();
     autoCreateUptimeMonitor();

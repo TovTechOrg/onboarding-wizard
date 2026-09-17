@@ -175,7 +175,6 @@ def test_no_request_ever_leaves_for_a_real_third_party(page, demo_app_url):
 
     page.goto(demo_app_url)
     page.wait_for_selector("#demoBanner")
-    page.fill("#render-key-input", "demo-key")
     page.click("#render-key-submit")
     page.wait_for_timeout(1500)
 
@@ -232,11 +231,10 @@ def test_a_cookie_blocked_browser_is_not_bounced(browser, demo_app_url):
     assert len(redirects) < 3, f"redirect loop for a cookie-blocked visitor: {redirects}"
 
     # Positive assertion #1: the render-key frame is genuinely interactive
-    # for this blocked browser, not just visible -- submitting a
-    # credential requires a session for router.py's validate-key endpoint
-    # to write into, so the next frame unlocking is proof a real session
-    # exists and is usable.
-    blocked.fill("#render-key-input", "demo-key")
+    # for this blocked browser, not just visible -- submitting the
+    # pre-filled, read-only credential requires a session for router.py's
+    # validate-key endpoint to write into, so the next frame unlocking is
+    # proof a real session exists and is usable.
     blocked.click("#render-key-submit")
     blocked.wait_for_selector("#frame-github-app:not([data-locked='true'])", timeout=10_000)
 
@@ -259,17 +257,25 @@ def test_a_cookie_blocked_browser_is_not_bounced(browser, demo_app_url):
     context.close()
 
 
-def test_the_github_shortcut_advances_the_frame(page, demo_app_url):
-    """Proves the DataTransfer file-input path actually works in a browser --
-    assigning .value to a file input is impossible, so this is the one way to
-    know the shortcut is real."""
+def test_github_app_fields_are_auto_filled_and_the_frame_advances_on_validate(page, demo_app_url):
+    """2026-09-17: readers should never need to type an App id or pick a
+    .pem file from their own device -- both are pre-filled and locked
+    (read-only text input, disabled file input) from page load, with no
+    button to click first. Proves the DataTransfer file-input path actually
+    works in a browser (assigning .value to a file input is impossible, so a
+    real change event dispatched from a synthesized File is the only way to
+    know the mock is real) and that clicking Validate alone advances the
+    frame."""
     page.goto(demo_app_url)
     page.wait_for_selector("#demoBanner")
-    page.fill("#render-key-input", "demo-key")
     page.click("#render-key-submit")
     page.wait_for_selector("#frame-github-app:not([data-locked='true'])", timeout=10_000)
 
-    page.click("#demoUseCredentials")
+    assert page.input_value("#github-app-id-input") != ""
+    assert page.get_attribute("#github-app-id-input", "readonly") is not None
+    assert page.get_attribute("#github-app-key-file-input", "disabled") is not None
+
+    page.click("#github-app-validate-submit")
     page.wait_for_selector("#frame-github-app[data-status='done']", timeout=10_000)
 
 
@@ -306,7 +312,8 @@ def test_auto_drive_fires_again_after_a_render_key_change(page, demo_app_url):
     page.wait_for_selector("#demoBanner")
 
     # First pass: render-key -> auto-driven render-service -> github-app.
-    page.fill("#render-key-input", "demo-key")
+    # render-key-input is pre-filled and read-only (2026-09-17), so no .fill()
+    # is needed or possible here.
     page.click("#render-key-submit")
     page.wait_for_selector("#frame-github-app:not([data-locked='true'])", timeout=10_000)
     page.wait_for_selector("#frame-render-key[data-status='done']", timeout=10_000)
@@ -330,7 +337,10 @@ def test_auto_drive_fires_again_after_a_render_key_change(page, demo_app_url):
 
     # Second pass: resubmitting the key must drive render-service through
     # its auto-create flow again, unlocking github-app a second time.
-    page.fill("#render-key-input", "demo-key-2")
+    # beginChange('render-key') doesn't clear the input's own value (only
+    # dashboard-auth/github-app/supabase/llm-provider clear their own on
+    # self-change -- see beginChange's own comment), so the same pre-filled,
+    # read-only value is simply resubmitted.
     page.click("#render-key-submit")
     page.wait_for_selector("#frame-github-app:not([data-locked='true'])", timeout=10_000)
 
