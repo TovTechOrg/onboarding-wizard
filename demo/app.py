@@ -193,7 +193,8 @@ async def _inject_demo_script(request, call_next):
             csp = f"{csp}; font-src 'self'"
         headers["content-security-policy"] = csp
     new_response = HTMLResponse(content=html, status_code=200, headers=headers)
-    if router.SESSION_COOKIE_NAME not in request.cookies:
+    existing_session_id = request.cookies.get(router.SESSION_COOKIE_NAME)
+    if existing_session_id is None or demo_session_store.get_session(existing_session_id) is None:
         session_id = demo_session_store.create_session()
         router._set_session_cookie(new_response, session_id)
     return new_response

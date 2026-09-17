@@ -237,14 +237,24 @@
     // The banner's own text also swaps (EN/HE differ in length/line
     // count), so the topbar's sticky offset -- measured off the banner's
     // live height -- is recomputed too, not just assumed to be unchanged.
-    document.addEventListener("click", function (event) {
-      if (event.target.closest("[data-lang-option], #langToggleBtn")) {
+    //
+    // The real language switch fires as a `change` event on
+    // input[name="lang"] (static/index.html wires
+    // `radio.addEventListener("change", ...)` on that exact selector) --
+    // NOT a click on "[data-lang-option]" (a selector that doesn't exist
+    // anywhere in this repo -- it was never real markup) or on
+    // "#langToggleBtn" (which only OPENS the language popup, before any
+    // language has actually changed). Listening on the radios' own
+    // `change` event mirrors index.html's own listener exactly, so this
+    // fires precisely when the language state has actually flipped.
+    document.querySelectorAll('input[name="lang"]').forEach(function (radio) {
+      radio.addEventListener("change", function () {
         setTimeout(function () {
           apply();
           bannerEl.textContent = BANNER[lang()];
           reapplyTopbarOffset();
         }, 0);
-      }
+      });
     });
   });
 })();

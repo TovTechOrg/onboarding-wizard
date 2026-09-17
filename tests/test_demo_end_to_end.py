@@ -336,12 +336,31 @@ def test_auto_drive_fires_again_after_a_render_key_change(page, demo_app_url):
 
 
 def test_banner_survives_a_language_switch(page, demo_app_url):
+    # "#frame-render-key" is a vacuous renumbering check: its title starts
+    # with "1." in BOTH English and Hebrew, so it would pass even if
+    # renumbering were completely broken. "#frame-github-app" is a real
+    # check -- demo.js's own top-of-file comment documents that its i18n
+    # key (frame2_title) carries the raw "4." in the underlying strings,
+    # not its post-renumbering "2.", so this only reads "2." at all because
+    # renumberKeptFrames() ran -- including after a language switch, which
+    # is exactly the path Item 1 fixed (applyLanguage() rewrites every
+    # [data-i18n] node, including this title, back to its raw "4.").
+    github_app_title = page.locator("#frame-github-app .frame-title")
+
     page.goto(demo_app_url)
     page.wait_for_selector("#demoBanner")
+    assert github_app_title.inner_text().strip().startswith("2.")
+
     page.click("#langToggleBtn")
     page.click('input[name="lang"][value="he"]')
     page.wait_for_timeout(300)
 
     assert page.locator("#demoBanner").is_visible()
+    assert page.locator("#demoBanner").inner_text() == "דמו — נתונים מדומיים."
     title = page.locator("#frame-render-key .frame-title").inner_text()
     assert title.strip().startswith("1."), "renumbering must survive applyLanguage()"
+    assert github_app_title.inner_text().strip().startswith("2."), (
+        "renumbering must survive applyLanguage() -- this frame's own i18n "
+        "string carries a different raw number, so this assertion is only "
+        "satisfied if renumberKeptFrames() actually re-ran after the switch"
+    )
