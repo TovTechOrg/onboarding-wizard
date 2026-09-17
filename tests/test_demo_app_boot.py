@@ -2,31 +2,6 @@ import pytest
 from cryptography.fernet import Fernet
 
 
-@pytest.fixture(scope="module", autouse=True)
-def _restore_real_clients_after_module():
-    """demo/app.py rebinds attributes directly onto the real session_store /
-    render_client / github_client / llm_client modules as an import-time side
-    effect (install_mocks() runs at module scope so `uvicorn demo.app:app`
-    works with no extra call) -- see demo/app.py's own docstring. That's
-    correct for running the demo as its own process, but inside this test
-    process it would otherwise permanently mock those modules for every test
-    that runs afterward in the same worker. Snapshot each module's full
-    __dict__ before `demo.app` is ever imported (nothing in this file imports
-    it above module scope, so this fixture's setup always runs first) and
-    restore it verbatim once every test in this module has finished."""
-    import github_client
-    import llm_client
-    import render_client
-    import session_store
-
-    modules = (session_store, render_client, github_client, llm_client)
-    snapshots = [dict(vars(m)) for m in modules]
-    yield
-    for module, snapshot in zip(modules, snapshots):
-        vars(module).clear()
-        vars(module).update(snapshot)
-
-
 @pytest.fixture
 def demo_env(monkeypatch):
     database_url = "postgresql://demo/demo"
