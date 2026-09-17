@@ -143,6 +143,12 @@ siblings) an explicit bypass fixture
 (`tests/test_deploy_script.py::_real_db_target`) rather than have them
 accidentally exercise the refusal path instead of the real one._
 
+### demo/static/demo.js's `#demoStartOver` duplicates the real header's `wizard-reset-button`
+- **Found during:** Task 10 (final mobile-legibility pass) mobile-CSS bugfix, `docs/superpowers/sdd/2026-09-17-demo-wizard/task-10-brief.md`.
+- **What:** While fixing a mobile overlap bug on the demo-only `#demoStartOver` button (previously `position: fixed; bottom: 1rem`, floating over frame content — see the task's own commit), it surfaced that `static/index.html`'s real header already has an equivalent control, `#wizard-reset-button` ("Start over" / "התחלה מחדש"), whose `resetWizard()` handler calls the identical `POST /api/session/reset` then reloads — the only behavioral difference is a confirm dialog first. The fix relocated `#demoStartOver` from a floating fixed button into `header.topbar` (in-flow, alongside the theme/language toggles) to eliminate the overlap, which now puts two adjacently-visible "Start over" pills in the header at once (screenshotted during `ui-visual-review`).
+- **Why parked:** Out of scope for a CSS-only mobile-bugfix task — deciding whether to remove the demo's own no-confirmation button (possibly deliberate, to reduce friction for a public demo visitor) versus relabeling it versus keeping both is a product/UX call, not a layout fix. Removing it would also mean touching the button's own `fetch(...)` call, which the task brief for this fix explicitly ruled out touching.
+- **Follow-up:** Decide (in a follow-up brainstorm, not silently) whether `demo/static/demo.js` should keep its own reset control at all now that one already exists in the shared header, or if it should, relabel it to something like "Reset now" to visually distinguish it from the real confirm-first control.
+
 ### render_client.py constructs a fresh httpx.AsyncClient per validate_key() call
 - **Found during:** Task 2 review and final whole-branch review, `docs/superpowers/plans/2026-08-26-onboarding-wizard-render-frame.md`
 - **What:** `validate_key()` opens a new `httpx.AsyncClient` context on every call instead of reusing/injecting one.

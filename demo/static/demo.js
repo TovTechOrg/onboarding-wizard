@@ -24,10 +24,46 @@
     el.id = "demoBanner";
     el.setAttribute("data-demo-banner", "");
     el.textContent = BANNER[lang()];
+    // font-size/line-height shrink at narrow widths so the banner text
+    // never wraps to a second line down to 320px (measured) -- keeps its
+    // height small and predictable instead of doubling on every mobile
+    // width this frame is reviewed at.
     el.style.cssText =
-      "padding:.5rem 1rem;text-align:center;background:#f5c518;color:#1a1a2e;" +
-      "font-weight:600;position:sticky;top:0;z-index:50";
+      "padding:.4rem 1rem;text-align:center;background:#f5c518;color:#1a1a2e;" +
+      "font-weight:600;font-size:.8rem;line-height:1.3;position:sticky;top:0;z-index:50";
     document.body.prepend(el);
+    return el;
+  }
+
+  // header.topbar (the theme/language toggle row, real markup from
+  // index.html) sits immediately after #demoBanner in the DOM with no
+  // margin of its own. #demoBanner is `position: sticky; top: 0`, so once
+  // the page scrolls past the topbar's own rest position by more than the
+  // banner's height, the topbar scrolls UNDER the still-pinned banner and
+  // gets visually clipped -- reproducible with a scroll as small as ~12px
+  // at some widths, i.e. any normal reading scroll or a mobile keyboard
+  // auto-scrolling a focused input into view.
+  //
+  // Shrinking the banner (above) narrows the danger zone but can't remove
+  // it -- the topbar would still eventually scroll under any nonzero-height
+  // sticky banner above it. The robust fix is making the topbar sticky too,
+  // pinned directly below the banner's own (measured, not assumed) height,
+  // so the two form one continuous sticky stack and the topbar can never be
+  // scrolled underneath the banner at all. Needs its own opaque background
+  // (topbar has none of its own -- it normally just shows body's) since it
+  // now has to occlude content scrolling up behind it.
+  function pinTopbarBelowBanner(bannerEl) {
+    var header = document.querySelector("header.topbar");
+    if (!header || !bannerEl) return function () {};
+    function apply() {
+      header.style.position = "sticky";
+      header.style.top = bannerEl.offsetHeight + "px";
+      header.style.zIndex = "49";
+      header.style.background = "var(--bg)";
+    }
+    apply();
+    window.addEventListener("resize", apply);
+    return apply;
   }
 
   function hideCollapsedFrames() {
@@ -170,35 +206,57 @@
     observer.observe(document.body, { attributes: true, childList: true, subtree: true });
   }
 
+  // Was `position: fixed; bottom: 1rem` -- floating independently of
+  // document flow, it sat on top of whatever frame content happened to be
+  // at that fixed viewport position (confirmed via elementFromPoint/
+  // elementsFromPoint: a validated frame's collapsed detail line, e.g.
+  // "-- account: bot-demo", at every mobile width from 390 down to 320px,
+  // in both LTR and RTL). Adding bottom padding to `main` can't fix this:
+  // the overlap happens with whichever frame is currently laid out under
+  // that fixed point, not necessarily the last one on the page, so no
+  // amount of trailing whitespace after the final frame keeps it clear.
+  // Placing it inside `header.topbar` instead makes it a normal in-flow
+  // sibling of the theme/language toggles -- it can never sit on top of
+  // frame content again, and it inherits the topbar's own sticky-below-the-
+  // banner fix above for free.
   function addStartOver() {
+    var header = document.querySelector("header.topbar");
     var link = document.createElement("button");
     link.id = "demoStartOver";
     link.type = "button";
+    link.className = "control";
     link.textContent = lang() === "he"
       ? "התחל מחדש"
       : "Start over";
-    link.style.cssText =
-      "position:fixed;bottom:1rem;inset-inline-end:1rem;z-index:60;font-size:.85rem";
+    link.style.cssText = "font-size:.85rem";
     link.addEventListener("click", function () {
       fetch("/api/session/reset", { method: "POST" }).then(function () {
         location.href = location.pathname;
       });
     });
-    document.body.appendChild(link);
+    if (header) header.appendChild(link);
+    else document.body.appendChild(link);
   }
 
   document.addEventListener("DOMContentLoaded", function () {
-    addBanner();
+    var bannerEl = addBanner();
+    var reapplyTopbarOffset = pinTopbarBelowBanner(bannerEl);
     apply();
     addShortcut();
     addStartOver();
     wireServiceLink();
     autoCreateRenderService();
     // applyLanguage() rewrites every [data-i18n] node, restoring the
-    // hardcoded numbers, so renumber again after a language switch.
+    // hardcoded numbers, so renumber again after a language switch. The
+    // banner's own text also swaps (EN/HE differ in length/line count), so
+    // the topbar's sticky offset -- measured off the banner's live height
+    // -- is recomputed too, not just assumed to be unchanged.
     document.addEventListener("click", function (event) {
       if (event.target.closest("[data-lang-option], #langToggleBtn")) {
-        setTimeout(apply, 0);
+        setTimeout(function () {
+          apply();
+          reapplyTopbarOffset();
+        }, 0);
       }
     });
   });
