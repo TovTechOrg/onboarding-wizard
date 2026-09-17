@@ -36,7 +36,9 @@ endpoint change).
    ```
    Idempotent — safe to re-run. Tear down afterward with
    `.claude/skills/ui-visual-review/dev_stack.sh stop`.
-2. **Run the helper script** shipped alongside this skill:
+2. **Run the helper script** shipped alongside this skill, with a **fresh
+   `<out_dir>` every single capture pass** — e.g. `screenshots/attempt-1`,
+   `screenshots/attempt-2`, never the same directory twice in one review:
    ```
    uv run --no-project python .claude/skills/ui-visual-review/screenshot_ui.py <url> <out_dir>
    ```
@@ -57,6 +59,25 @@ endpoint change).
      that `dir="rtl"` got set on an element.
 4. **Fix and re-run** until all renders look correct. Don't declare the UI
    change done on the strength of the light-desktop screenshot alone.
+
+## Re-reading discipline (don't burn tokens re-viewing what you've already seen)
+
+Once you've read a PNG and written down what it showed, **don't `Read` that
+exact file again later in the review just to double-check** — trust your own
+earlier description instead of re-viewing an image whose content you already
+have no reason to think changed.
+
+This is *not* license to skip re-capturing after a fix. Every fix genuinely
+needs a fresh screenshot and a fresh read, because the rendered page actually
+changed — that's the point of step 4's loop. **The two are kept unambiguous
+by always writing each capture pass to a brand-new `<out_dir>` (never
+overwriting `light-desktop.png`/etc. in place).** A new path is unarguably a
+new state that needs reading; an old path you've already read is unarguably
+one you already described. Reusing the same filename across a fix→recapture
+cycle collapses that distinction — a "have I already looked at this?" check
+can no longer tell "yes, and nothing's changed since" apart from "yes, but
+it's since been overwritten with a fix," which is exactly the mistake to
+avoid in either direction.
 
 ## Script
 
