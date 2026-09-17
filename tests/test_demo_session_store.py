@@ -43,18 +43,26 @@ def test_unknown_session_fails_closed_and_never_upserts():
 
 
 def test_collapsed_frames_are_seeded_complete():
-    """The trimmed flow keeps 4 frames; the other 4 must already be done, so
-    the wizard's own frame machinery advances past them with no client hack.
+    """The trimmed flow keeps 4 frames; 2 of the other 4 (dashboard_auth,
+    supabase -- both positioned BEFORE llm-provider in static/index.html's
+    FRAME_ORDER) must already be done, so the wizard's own frame machinery
+    advances past them with no client hack.
+
+    uptime_pinger is deliberately NOT preseeded here (2026-09-17) -- it sits
+    AFTER llm-provider, and preseeding it used to unlock render-deploy at
+    page load regardless of llm-provider's real state (see
+    demo/session_store.py's _PRESEEDED_FRAMES comment). demo.js's
+    autoCreateUptimeMonitor() completes it for real, exactly when
+    llm-provider unlocks it.
 
     Backend frame keys, confirmed against router.py's GET /api/session
-    handler -- NOT 1:1 with the wizard's UI frame ids. Notably
-    "uptime_pinger" is the real key (the brief's original draft guessed
-    "uptimerobot", which router.py never reads)."""
+    handler -- NOT 1:1 with the wizard's UI frame ids."""
     demo_store.reset()
     sid = demo_store.create_session()
     session = demo_store.get_session(sid)
-    for backend_key in ("dashboard_auth", "supabase", "uptime_pinger"):
+    for backend_key in ("dashboard_auth", "supabase"):
         assert backend_key in session.frames, f"{backend_key} should be pre-completed"
+    assert "uptime_pinger" not in session.frames
 
 
 def test_seeded_frames_satisfy_router_completeness_checks():
@@ -63,14 +71,12 @@ def test_seeded_frames_satisfy_router_completeness_checks():
     - dashboard_auth: any truthy dict (router.py:536 `if data.get(...)`)
     - supabase: must contain "database_url" (router.py:543), not just "ref"
       (a bare "ref" is the in-between "provisioning" state, not complete)
-    - uptime_pinger: any truthy dict (router.py:578 `if data.get(...)`)
     """
     demo_store.reset()
     sid = demo_store.create_session()
     session = demo_store.get_session(sid)
     assert session.frames["dashboard_auth"]
     assert "database_url" in session.frames["supabase"]
-    assert session.frames["uptime_pinger"]
 
 
 def test_sweep_evicts_only_expired_sessions():

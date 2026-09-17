@@ -1050,6 +1050,18 @@ async def bulk_push_render_env_vars(request: Request) -> dict:
     render_frame = session.frames.get("render")
     if not render_frame or "api_key" not in render_frame or "service_id" not in render_frame:
         return {"valid": False, "reason": "no_session"}
+    # Unlike github_app/supabase/dashboard_auth below (each best-effort --
+    # omitted silently if the visitor never reached them), llm_provider is a
+    # hard requirement: skipping it used to let a deploy through with no
+    # LLM_PROVIDER/model ever seeded into slot_config, silently producing a
+    # "live" bot that can't review anything and no error anywhere in the
+    # flow (found 2026-09-17 by clicking Deploy before the LLM step
+    # validated -- the wizard's own client-side gating unlocks "Finish &
+    # Deploy" too early in the demo, see demo/session_store.py's
+    # _PRESEEDED_FRAMES comment; this is the fail-closed backstop for that
+    # and for any other way the client-side gate could be bypassed).
+    if not session.frames.get("llm_provider"):
+        return {"valid": False, "reason": "llm_provider_not_ready"}
 
     env_vars: dict[str, str] = {}
 

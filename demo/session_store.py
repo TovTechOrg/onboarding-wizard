@@ -31,10 +31,23 @@ from session_store import SESSION_TTL, SessionData, SessionNotFound  # noqa: F40
 #     "provisioning" state, not done. "ref"/"name" are included too since
 #     later reads (project-status/connection-info request handlers) key
 #     off them.
-#   - "uptime_pinger" (NOT "uptimerobot", which router.py never reads) --
-#     router.py:578 treats any truthy dict as complete; "api_key"/
-#     "monitor_id" are seeded anyway since delete-monitor
-#     (router.py:974-976) requires both.
+#
+# "uptime_pinger" is deliberately NOT preseeded here even though it's one of
+# COLLAPSED_FRAMES too (demo/static/demo.js) -- unlike dashboard_auth/
+# supabase, which both sit BEFORE llm-provider in static/index.html's
+# FRAME_ORDER, uptime-pinger sits AFTER it. Preseeding it done from session
+# creation used to make restoreFromSession() call completeFrame("uptime-
+# pinger", ...) at page load, whose own nextFrame() cascade unconditionally
+# unlocks "render-deploy" next -- with no check of render-deploy's real
+# prereqs (which include llm-provider). Found 2026-09-17: clicking Deploy
+# while "3. LLM provider" still read "Not started" pushed no LLM credential,
+# seeded nothing into slot_config, and still reported the deploy "Live".
+# demo/static/demo.js's autoCreateUptimeMonitor() now drives uptime-pinger's
+# own real frame (same "reuse the real machinery" pattern as
+# autoCreateRenderService() there) exactly when llm-provider unlocks it,
+# so render-deploy only ever unlocks once llm-provider is genuinely done.
+# router.py's bulk_push_render_env_vars refuses server-side too now, as a
+# backstop for any other way this client-side gate could be bypassed.
 _PRESEEDED_FRAMES: dict[str, dict] = {
     "dashboard_auth": {
         "username": "demo",
@@ -46,7 +59,6 @@ _PRESEEDED_FRAMES: dict[str, dict] = {
         "name": "demo-project",
         "database_url": "postgresql://demo:demo@localhost:5432/demo",
     },
-    "uptime_pinger": {"api_key": "demo-key", "monitor_id": "demo-monitor"},
 }
 
 _sessions: dict[str, dict[str, dict]] = {}

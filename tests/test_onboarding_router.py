@@ -2041,10 +2041,24 @@ async def test_bulk_push_assembles_every_frame_into_one_push_call(monkeypatch):
     assert seeded["args"] == ("postgresql://x", "gemini", "gemini-flash-latest", None, None)
 
 
+def _fake_probe_gemini_model_ok(monkeypatch):
+    async def fake_probe_gemini_model(api_key, model):
+        return llm_client.LlmModelProbed(model=model)
+
+    monkeypatch.setattr(llm_client, "probe_gemini_model", fake_probe_gemini_model)
+    monkeypatch.setattr(router, "_seed_provider_config", lambda *a, **k: True)
+
+
 async def test_bulk_push_omits_a_frame_that_was_never_completed(monkeypatch):
     fake = _use_fake_session_store(monkeypatch)
     session_id = fake.create_session()
     fake.update_frame(session_id, "render", {"api_key": "rnd_x", "service_id": "srv-1"})
+    fake.update_frame(session_id, "supabase", {"database_url": "postgresql://x"})
+    fake.update_frame(
+        session_id, "llm_provider",
+        {"provider": "gemini", "credential_value": "AIza-x", "model": "gemini-flash-latest"},
+    )
+    _fake_probe_gemini_model_ok(monkeypatch)
     captured = {}
 
     async def fake_push_env_vars(api_key, service_id, values):
@@ -2055,12 +2069,15 @@ async def test_bulk_push_omits_a_frame_that_was_never_completed(monkeypatch):
     client = await _client()
     await client.post("/api/render/bulk-push-env-vars", cookies={"onboarding_session": session_id})
     # The generic operational-tuning defaults are always included, unlike
-    # every other key (which is gated on its frame being complete).
-    # RENDER_API_KEY is read from the render frame itself, which this
-    # endpoint's own guard clause already requires to be present -- so it
-    # is never actually omitted the way other frames' keys are.
+    # every other key (which is gated on its frame being complete) -- except
+    # llm_provider, which is a hard requirement (see
+    # test_bulk_push_refuses_when_llm_provider_is_missing) and so is always
+    # present here. github_app/dashboard_auth stay genuinely optional:
+    # omitted below since this session never completed them.
     assert captured["values"] == {
         "RENDER_API_KEY": "rnd_x",
+        "DATABASE_URL": "postgresql://x",
+        "GEMINI_API_KEY": "AIza-x",
         **router._GENERIC_OPERATIONAL_ENV_DEFAULTS,
     }
 
@@ -2075,6 +2092,12 @@ async def test_bulk_push_includes_github_target_repo_wildcard(monkeypatch):
     fake = _use_fake_session_store(monkeypatch)
     session_id = fake.create_session()
     fake.update_frame(session_id, "render", {"api_key": "rnd_x", "service_id": "srv-1"})
+    fake.update_frame(session_id, "supabase", {"database_url": "postgresql://x"})
+    fake.update_frame(
+        session_id, "llm_provider",
+        {"provider": "gemini", "credential_value": "AIza-x", "model": "gemini-flash-latest"},
+    )
+    _fake_probe_gemini_model_ok(monkeypatch)
     captured = {}
 
     async def fake_push_env_vars(api_key, service_id, values):
@@ -2085,6 +2108,30 @@ async def test_bulk_push_includes_github_target_repo_wildcard(monkeypatch):
     client = await _client()
     await client.post("/api/render/bulk-push-env-vars", cookies={"onboarding_session": session_id})
     assert captured["values"]["GITHUB_TARGET_REPO"] == "*"
+
+
+async def test_bulk_push_refuses_when_llm_provider_is_missing(monkeypatch):
+    """The concrete case this guards: clicking Deploy before the LLM
+    provider step is ever validated used to push env vars/trigger a deploy
+    anyway, silently seeding nothing into slot_config and reporting the
+    deploy "live" -- a bot with no reviewer configured and no error
+    anywhere. See router.py's bulk_push_render_env_vars guard comment."""
+    fake = _use_fake_session_store(monkeypatch)
+    session_id = fake.create_session()
+    fake.update_frame(session_id, "render", {"api_key": "rnd_x", "service_id": "srv-1"})
+    pushed = {"called": False}
+
+    async def fake_push_env_vars(api_key, service_id, values):
+        pushed["called"] = True
+        return render_client.RenderEnvVarsPushed(pushed=list(values.keys()))
+
+    monkeypatch.setattr(render_client, "push_env_vars", fake_push_env_vars)
+    client = await _client()
+    resp = await client.post(
+        "/api/render/bulk-push-env-vars", cookies={"onboarding_session": session_id}
+    )
+    assert resp.json() == {"valid": False, "reason": "llm_provider_not_ready"}
+    assert pushed["called"] is False
 
 
 def test_seed_provider_config_writes_a_real_row(db_url, db_query):
@@ -2336,6 +2383,12 @@ async def test_bulk_push_partial_failure_reports_pushed_keys(monkeypatch):
         session_id, "github_app",
         {"app_id": 1, "private_key_b64": "pk", "webhook_secret": "wh", "installation_id": 42},
     )
+    fake.update_frame(session_id, "supabase", {"database_url": "postgresql://x"})
+    fake.update_frame(
+        session_id, "llm_provider",
+        {"provider": "gemini", "credential_value": "AIza-x", "model": "gemini-flash-latest"},
+    )
+    _fake_probe_gemini_model_ok(monkeypatch)
 
     async def fake_push_env_vars(api_key, service_id, values):
         return render_client.RenderEnvVarsPushFailed(reason="invalid_key", pushed=["GITHUB_APP_ID"])

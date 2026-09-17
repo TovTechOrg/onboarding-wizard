@@ -240,10 +240,15 @@ async def test_a_real_network_call_never_fires_on_a_render_key_change(demo_env, 
     """Final-review C3 regression test: router.py's delete-monitor endpoint
     (reached from static/index.html's beginChange('render-key') ->
     cleanupOrphanedUptimeMonitor()) used to call the REAL, unmocked
-    uptimerobot_client -- demo/session_store.py's uptime_pinger preseed
-    always satisfies delete-monitor's precondition (api_key + monitor_id
-    both present), so this fired a genuine outbound HTTPS call to
-    api.uptimerobot.com on every "Change" click. Patches
+    uptimerobot_client -- demo/session_store.py's uptime_pinger preseed used
+    to always satisfy delete-monitor's precondition (api_key + monitor_id
+    both present) from session creation onward, so this fired a genuine
+    outbound HTTPS call to api.uptimerobot.com on every "Change" click, even
+    before llm-provider (and so uptime-pinger) was ever reached. uptime_pinger
+    is no longer preseeded (2026-09-17 -- see demo/session_store.py's
+    _PRESEEDED_FRAMES comment), so this precondition now genuinely isn't met
+    this early either, and the guard below is a backstop for once it is (a
+    demo session that already ran autoCreateUptimeMonitor()). Patches
     httpx.AsyncHTTPTransport.handle_async_request to raise if ANY outbound
     HTTP call is attempted, then drives the exact request the browser makes
     and confirms zero outbound attempts and a clean response."""

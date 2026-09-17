@@ -181,6 +181,41 @@
     maybeTrigger();
   }
 
+  // The uptime-pinger frame is hidden (COLLAPSED_FRAMES above) but, unlike
+  // dashboard-auth/supabase, is no longer pre-seeded complete at session
+  // creation (see demo/session_store.py's _PRESEEDED_FRAMES comment,
+  // 2026-09-17) -- it sits AFTER llm-provider in static/index.html's
+  // FRAME_ORDER, and preseeding it used to fire completeFrame("uptime-
+  // pinger", ...) at page load, whose own nextFrame() cascade unconditionally
+  // unlocked "render-deploy" regardless of llm-provider's real state. Driving
+  // uptime-pinger through its own real frame (same pattern as
+  // autoCreateRenderService() above) exactly when it unlocks -- which only
+  // happens once llm-provider is genuinely done, per the real gating engine
+  // -- means render-deploy's own unlock (triggered by uptime-pinger's
+  // completion, same as in the real, non-demo wizard) can never fire early.
+  function autoCreateUptimeMonitor() {
+    var frame = document.getElementById("frame-uptime-pinger");
+    if (!frame) return;
+    var triggered = false;
+    function maybeTrigger() {
+      if (frame.getAttribute("data-locked") === "true") {
+        // Same reset-latch reasoning as autoCreateRenderService() above --
+        // a real prerequisite (llm-provider) can legitimately relock this.
+        triggered = false;
+        return;
+      }
+      if (triggered) return;
+      triggered = true;
+      var input = document.getElementById("uptime-pinger-api-key-input");
+      if (input) input.value = "demo-uptimerobot-key";
+      if (typeof submitUptimeRobotKey === "function") submitUptimeRobotKey();
+    }
+    new MutationObserver(maybeTrigger).observe(frame, {
+      attributes: true, attributeFilter: ["data-locked"]
+    });
+    maybeTrigger();
+  }
+
   function chosenProvider() {
     var checked = document.querySelector(
       'input[name="llm-provider-choice"]:checked'
@@ -229,6 +264,7 @@
     addShortcut();
     wireServiceLink();
     autoCreateRenderService();
+    autoCreateUptimeMonitor();
     // applyLanguage() rewrites every [data-i18n] node, restoring the
     // hardcoded numbers, so renumber again after a language switch. The
     // banner itself is not a [data-i18n] node (addBanner() sets its
