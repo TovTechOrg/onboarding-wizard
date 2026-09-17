@@ -58,3 +58,29 @@ def test_dockerignore_does_not_exclude_the_contract_router_reads_at_import_time(
     assert "contracts/" in DOCKERIGNORE
     assert "!contracts/provisioning.json" in DOCKERIGNORE
     assert DOCKERIGNORE.index("contracts/") < DOCKERIGNORE.index("!contracts/provisioning.json")
+
+
+def test_no_blanket_copy_of_the_build_context():
+    """`COPY . .` makes .dockerignore the only gate on what ships, and would
+    silently ship demo/ into production."""
+    live = [
+        line.strip() for line in DOCKERFILE.splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+    assert "COPY . ." not in live
+
+
+def test_demo_package_never_ships_in_the_production_image():
+    assert "COPY demo" not in DOCKERFILE
+
+
+def test_application_modules_are_copied_explicitly():
+    for module in ("main.py", "router.py", "config.py", "session_store.py",
+                   "render_client.py", "github_client.py", "llm_client.py",
+                   "supabase_client.py", "uptimerobot_client.py"):
+        assert module in DOCKERFILE, f"{module} must be COPY'd explicitly"
+
+
+def test_contracts_json_still_ships():
+    """router.py reads contracts/provisioning.json at import time."""
+    assert "contracts/" in DOCKERFILE or "contracts" in DOCKERFILE

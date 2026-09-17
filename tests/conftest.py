@@ -217,6 +217,81 @@ def _touches_shared_postgres(item: pytest.Item) -> bool:
     return "db_url" in item.fixturenames
 
 
+@pytest.fixture(scope="module", autouse=True)
+def _restore_real_clients_after_demo_app_import():
+    """`demo/app.py` rebinds attributes directly onto the real session_store /
+    render_client / github_client / llm_client modules as an import-time side
+    effect of its own `install_mocks()` call, which runs unconditionally at
+    module scope (so `uvicorn demo.app:app` works with no extra call -- see
+    demo/app.py's own docstring) and therefore only ONCE per process, the
+    first time anything imports `demo.app` -- Python caches the module after
+    that, so a second `from demo.app import app` elsewhere does not call
+    install_mocks() again. That one-shot rebind is correct for running the
+    demo as its own process, but inside THIS test process it would otherwise
+    permanently mock those four modules for every other test that happens to
+    run afterward in the same pytest-xdist worker (measured while building
+    tests/test_demo_app_boot.py: 86+ unrelated failures in
+    test_onboarding_render_client.py / test_onboarding_llm_client.py before a
+    restore fixture existed).
+
+    This used to be a fixture private to tests/test_demo_app_boot.py -- that
+    protected only that one file. Tasks 5+ add more test files that also
+    import `demo.app` (test_demo_chrome.py, test_demo_routes.py,
+    test_demo_end_to_end.py, ...), each facing the identical hazard, so the
+    fix belongs here where every test file gets it for free with no per-file
+    opt-in required -- a module-scoped autouse fixture in conftest.py gets
+    instantiated separately for EVERY test module pytest collects, so this
+    same protection now applies per-file automatically, matching the
+    per-file blast radius of the hazard it guards against.
+
+    Deliberately module-scoped, not function-scoped: since install_mocks()
+    only ever fires once per process (module-level caching, see above), a
+    function-scoped restore would restore the real modules after the first
+    test that happens to trigger the import, leaving every later test in
+    that file with no mocks at all even though `demo.app` "looks" imported
+    -- this was caught directly: switching this fixture to function scope
+    during development broke test_app_boots_with_no_database (the third test
+    in test_demo_app_boot.py) because the mocks it depends on had already
+    been un-installed by test 1's teardown. Module scope matches the actual
+    lifetime of the thing being guarded (once per module import, not once
+    per test). Snapshotting these modules' __dict__ per module is a handful
+    of cheap dict copies, negligible next to this suite's Postgres/browser
+    fixtures, whether or not that module ever touches `demo.app` at all.
+
+    `supabase_client` and `uptimerobot_client` were added alongside
+    `router` (2026-09-17 final-review fix wave): demo/app.py's `_PAIRS` now
+    also mocks those two clients (closing the C3 finding -- a real
+    api.uptimerobot.com call fired from "Change"-ing render-key), and
+    demo/app.py separately rebinds `router._seed_provider_config` itself
+    (it has no paired module -- see demo/app.py's own comment) to a no-op
+    success stub, closing the C1 finding (a real, unreachable psycopg
+    connection broke Finish & Deploy for every demo visitor). Both are
+    real, permanent module-global mutations exactly like the original
+    four, and tests/test_onboarding_router.py's own
+    `test_seed_provider_config_*` tests call `router._seed_provider_config`
+    directly against a real Postgres test DB with no monkeypatch of their
+    own -- without restoring `router` here too, a demo test module running
+    earlier in the same xdist worker would leave those tests silently
+    exercising the mock instead of the real function."""
+    import github_client
+    import llm_client
+    import render_client
+    import router
+    import session_store
+    import supabase_client
+    import uptimerobot_client
+
+    modules = (
+        session_store, render_client, github_client, llm_client,
+        supabase_client, uptimerobot_client, router,
+    )
+    snapshots = [dict(vars(m)) for m in modules]
+    yield
+    for module, snapshot in zip(modules, snapshots):
+        vars(module).clear()
+        vars(module).update(snapshot)
+
+
 @pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     """Auto-tag every Postgres-touching test with `db` (for `pytest -m "not

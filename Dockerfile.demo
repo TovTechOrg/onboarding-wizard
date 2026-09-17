@@ -1,3 +1,6 @@
+# Demo image. Mirrors Dockerfile, plus demo/, booting demo.app:app and
+# baking its own fake settings so a demo deployment has no env-var
+# configuration to get wrong. None of these values authenticate anything.
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -26,9 +29,18 @@ COPY render_client.py github_client.py llm_client.py ./
 COPY supabase_client.py uptimerobot_client.py ./
 COPY static/ ./static/
 COPY contracts/ ./contracts/
+COPY demo/ ./demo/
+
+# Fake-but-present. DATABASE_URL is never dialled -- demo/session_store.py
+# replaces the pool -- but main.py refuses to boot on an empty one. The
+# encryption key must be a STRUCTURALLY VALID Fernet key: main.py constructs
+# Fernet(key) at boot. It encrypts nothing; the mock store holds no secrets.
+ENV DATABASE_URL="postgresql://demo:demo@127.0.0.1:5432/demo" \
+    ONBOARDING_SESSION_ENCRYPTION_KEY="xZj-oNDwS8lUbvwHUFUjlfRzd2rKasDc7N2ov7DDtBw=" \
+    DEMO_BOT_URL="https://demo-pr-review-engine.onrender.com"
 
 USER appuser
 
 EXPOSE 8000
 
-CMD ["uv", "run", "--no-sync", "--no-dev", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uv", "run", "--no-sync", "--no-dev", "uvicorn", "demo.app:app", "--host", "0.0.0.0", "--port", "8000"]
