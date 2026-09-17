@@ -17,7 +17,15 @@ RUN useradd -m -u 1000 appuser
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
-COPY . .
+# Explicit, not `COPY . .`: the blanket form made .dockerignore the only gate
+# on what ships (it was shipping .env.example and local agent config), and
+# would ship demo/ into production -- which .dockerignore cannot prevent,
+# since it applies to Dockerfile.demo's build too.
+COPY main.py router.py config.py session_store.py ./
+COPY render_client.py github_client.py llm_client.py ./
+COPY supabase_client.py uptimerobot_client.py ./
+COPY static/ ./static/
+COPY contracts/ ./contracts/
 
 USER appuser
 

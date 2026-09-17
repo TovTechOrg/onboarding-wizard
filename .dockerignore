@@ -34,3 +34,16 @@ scripts/
 # stays excluded by default.
 contracts/
 !contracts/provisioning.json
+
+# `.env` does not match `.env.example`.
+.env.example
+
+# Local agent/tooling config, never part of the service.
+.claude/
+.impeccable/
+
+# Any service-account / private-key JSON, whatever it is named. None exists
+# in this repo today; the narrow `gcp-service-account-key*.json` pattern
+# alone missed a real file in the sibling repo.
+*private-key*.json
+*service-account*.json
