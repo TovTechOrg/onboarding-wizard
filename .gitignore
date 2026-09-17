@@ -5,6 +5,9 @@ Thumbs.db
 # Secrets
 .env
 
+# Operational config (non-secret, machine-specific) -- see .env.config.example
+.env.config
+
 .venv/
 __pycache__/
 **/__pycache__/

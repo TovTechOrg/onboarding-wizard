@@ -1,8 +1,8 @@
 """Tests for config.py's Settings: no public_base_url field exists (the
 page derives its own base from location.origin instead — see CLAUDE.md),
-and database_url/onboarding_session_encryption_key read from the real
-process environment only (this service doesn't share the sibling
-review-engine project's config files)."""
+and every field (database_url, onboarding_session_encryption_key,
+demo_bot_url) reads from the real process environment only (this service
+doesn't share the sibling review-engine project's config files)."""
 
 from __future__ import annotations
 
@@ -43,3 +43,13 @@ def test_session_encryption_key_reads_from_environment_unvalidated(monkeypatch):
 def test_session_encryption_key_whitespace_only_value_normalizes_to_the_unset_sentinel(monkeypatch):
     monkeypatch.setenv("ONBOARDING_SESSION_ENCRYPTION_KEY", "   ")
     assert Settings().onboarding_session_encryption_key == ""
+
+
+def test_demo_bot_url_defaults_to_the_live_demo_host(monkeypatch):
+    monkeypatch.delenv("DEMO_BOT_URL", raising=False)
+    assert Settings().demo_bot_url == "https://demo-pr-review-bot.onrender.com"
+
+
+def test_demo_bot_url_reads_an_env_override(monkeypatch):
+    monkeypatch.setenv("DEMO_BOT_URL", "https://demo-pr-review-bot-fork.onrender.com")
+    assert Settings().demo_bot_url == "https://demo-pr-review-bot-fork.onrender.com"

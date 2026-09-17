@@ -42,6 +42,17 @@ class Settings(BaseSettings):
     # RuntimeError with a clean, hand-written message.
     onboarding_session_encryption_key: str = ""
 
+    # Where the demo wizard's "Finish & Deploy" step sends the reader: the
+    # already-deployed bot demo. Non-secret, sourced from the real process
+    # environment only (like every field above -- this class deliberately
+    # never reads a dotenv file itself; see .env.config.example for why a
+    # non-secret file still exists for this one). Previously a bespoke
+    # `os.environ.get("DEMO_BOT_URL", ...)` in demo/content.py rather than a
+    # proper Settings field -- moved here so the sibling review-engine
+    # project's own config.py isn't the only one of the two with a real
+    # settings mechanism for its own copy of this same URL.
+    demo_bot_url: str = "https://demo-pr-review-bot.onrender.com"
+
     @field_validator("database_url")
     @classmethod
     def _normalize_database_url(cls, value: str) -> str:
