@@ -35,9 +35,16 @@ COPY demo/ ./demo/
 # replaces the pool -- but main.py refuses to boot on an empty one. The
 # encryption key must be a STRUCTURALLY VALID Fernet key: main.py constructs
 # Fernet(key) at boot. It encrypts nothing; the mock store holds no secrets.
+# DEMO_BOT_URL deliberately NOT baked here (unlike the two above): it has no
+# "fake but present" need -- config.py's Settings default is already the
+# real, correct demo-bot hostname, and a real env var here would just be a
+# second copy of that value to keep in sync by hand. This is exactly how a
+# stale copy (the old -engine hostname, corrected 2026-09-17 to -bot)
+# shipped: baked here as a real process env var, it silently WON over the
+# Settings default at runtime, so fixing content.py's own default alone was
+# not enough -- see tests/test_dockerfile_demo.py's regression test.
 ENV DATABASE_URL="postgresql://demo:demo@127.0.0.1:5432/demo" \
-    ONBOARDING_SESSION_ENCRYPTION_KEY="xZj-oNDwS8lUbvwHUFUjlfRzd2rKasDc7N2ov7DDtBw=" \
-    DEMO_BOT_URL="https://demo-pr-review-engine.onrender.com"
+    ONBOARDING_SESSION_ENCRYPTION_KEY="xZj-oNDwS8lUbvwHUFUjlfRzd2rKasDc7N2ov7DDtBw="
 
 USER appuser
 

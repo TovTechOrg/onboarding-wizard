@@ -35,5 +35,16 @@ def test_demo_image_declares_a_database_url_it_never_uses():
     assert "DATABASE_URL" in DEMO
 
 
+def test_demo_image_does_not_bake_a_stale_demo_bot_url():
+    """DEMO_BOT_URL must NOT be a real ENV in this image: config.py's Settings
+    default is already correct, and a real process env var here would win
+    over it at runtime regardless of what that default says -- exactly how
+    the dead `-engine` hostname (corrected 2026-09-17 to `-bot`) shipped: the
+    Settings default was fixed, but this file's own baked ENV silently kept
+    overriding it in the deployed image. Checked against the live lines
+    (comments may still mention the name to explain why it's absent)."""
+    assert not any("DEMO_BOT_URL" in line for line in _live_lines(DEMO))
+
+
 def test_no_recursive_chown():
     assert not any("chown -R" in line for line in _live_lines(DEMO))
