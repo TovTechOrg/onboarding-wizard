@@ -106,6 +106,38 @@
     body.prepend(button);
   }
 
+  // The render-service frame is hidden (COLLAPSED_FRAMES above), but its
+  // data is NOT synthetic the way dashboard-auth/supabase/uptime-pinger's
+  // is (demo/session_store.py's _PRESEEDED_FRAMES) -- github-app's own
+  // validateGithubApp() reads readStoredRenderService().service_url from
+  // sessionStorage before ever calling the relay, and uptime-pinger reads
+  // the same record's URL later, so *something* has to actually call
+  // POST /api/render/create-service (demo/render_client.py's mock still
+  // answers it) once render-key is done, the same way a visitor would by
+  // hand in the real wizard. Watching this frame's own `data-locked`
+  // attribute (flipped by the page's own completeFrame() chain right
+  // after render-key finishes) and driving its already-existing
+  // prefillRenderServiceDefaults()/createRenderService() functions
+  // (global, since index.html's own <script> is a classic script, not a
+  // module) reuses the real machinery exactly like addShortcut() does for
+  // github-app, rather than reimplementing the create-service call here.
+  function autoCreateRenderService() {
+    var frame = document.getElementById("frame-render-service");
+    if (!frame) return;
+    var triggered = false;
+    function maybeTrigger() {
+      if (triggered) return;
+      if (frame.getAttribute("data-locked") === "true") return;
+      triggered = true;
+      if (typeof prefillRenderServiceDefaults === "function") prefillRenderServiceDefaults();
+      if (typeof createRenderService === "function") createRenderService();
+    }
+    new MutationObserver(maybeTrigger).observe(frame, {
+      attributes: true, attributeFilter: ["data-locked"]
+    });
+    maybeTrigger();
+  }
+
   function chosenProvider() {
     var checked = document.querySelector(
       'input[name="llm-provider-choice"]:checked'
@@ -154,6 +186,7 @@
     addShortcut();
     addStartOver();
     wireServiceLink();
+    autoCreateRenderService();
     // applyLanguage() rewrites every [data-i18n] node, restoring the
     // hardcoded numbers, so renumber again after a language switch.
     document.addEventListener("click", function (event) {

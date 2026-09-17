@@ -65,6 +65,19 @@ async def _inject_demo_script(request, call_next):
     index.html is left byte-identical on purpose: tests/test_onboarding_page.py
     pins one fetch(...) per credential-carrying endpoint, and the demo trims
     the flow by mocking the backend rather than by editing the page.
+
+    Also relaxes the served page's own Content-Security-Policy header to
+    add `'self'` to `script-src` -- router.py's `_render_index()` (shared
+    with the real wizard) sets `script-src 'unsafe-inline'` with no
+    `'self'`, which is correct for the real page (every real script is
+    inline) but silently blocks a real browser from ever loading this
+    externally-referenced `<script src="/static/demo.js">` at all. Found
+    by tests/test_demo_end_to_end.py -- every other demo test drives the
+    app via httpx's ASGITransport, which never enforces CSP the way a
+    real browser does, so this was invisible until one used real
+    Chromium. Adjusting the header only on this response (never touching
+    router.py's own header-building code) keeps the real wizard's
+    stricter policy completely unchanged.
     """
     response = await call_next(request)
     if request.url.path != "/" or response.status_code != 200:
@@ -72,9 +85,15 @@ async def _inject_demo_script(request, call_next):
 
     body = b"".join([chunk async for chunk in response.body_iterator])
     html = body.decode("utf-8").replace("</body>", f"{_SCRIPT_TAG}</body>", 1)
-    return HTMLResponse(content=html, status_code=200, headers={
+    headers = {
         k: v for k, v in response.headers.items() if k.lower() != "content-length"
-    })
+    }
+    csp = headers.get("content-security-policy")
+    if csp:
+        headers["content-security-policy"] = csp.replace(
+            "script-src 'unsafe-inline'", "script-src 'unsafe-inline' 'self'"
+        )
+    return HTMLResponse(content=html, status_code=200, headers=headers)
 
 
 from demo.routes import router as demo_router  # noqa: E402
