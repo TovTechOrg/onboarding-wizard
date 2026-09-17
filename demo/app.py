@@ -45,4 +45,36 @@ install_mocks()
 
 from main import app  # noqa: E402  (must follow install_mocks)
 
+from pathlib import Path  # noqa: E402
+
+from fastapi.responses import FileResponse, HTMLResponse  # noqa: E402
+
+_DEMO_STATIC = Path(__file__).parent / "static"
+_SCRIPT_TAG = '<script src="/static/demo.js" defer></script>'
+
+
+@app.get("/static/demo.js", include_in_schema=False)
+async def _demo_script() -> FileResponse:
+    return FileResponse(_DEMO_STATIC / "demo.js", media_type="application/javascript")
+
+
+@app.middleware("http")
+async def _inject_demo_script(request, call_next):
+    """Inject the demo asset into the served page without editing index.html.
+
+    index.html is left byte-identical on purpose: tests/test_onboarding_page.py
+    pins one fetch(...) per credential-carrying endpoint, and the demo trims
+    the flow by mocking the backend rather than by editing the page.
+    """
+    response = await call_next(request)
+    if request.url.path != "/" or response.status_code != 200:
+        return response
+
+    body = b"".join([chunk async for chunk in response.body_iterator])
+    html = body.decode("utf-8").replace("</body>", f"{_SCRIPT_TAG}</body>", 1)
+    return HTMLResponse(content=html, status_code=200, headers={
+        k: v for k, v in response.headers.items() if k.lower() != "content-length"
+    })
+
+
 __all__ = ["app", "install_mocks"]
