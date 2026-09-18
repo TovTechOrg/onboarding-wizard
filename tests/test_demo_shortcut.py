@@ -54,3 +54,19 @@ def test_the_llm_provider_picker_itself_stays_mutable():
 def test_service_link_carries_the_chosen_provider():
     assert "render-deploy-service-link" in DEMO_JS
     assert "provider=" in DEMO_JS
+
+
+def test_service_link_also_carries_the_chosen_model():
+    """The reader's actual model pick (not just which provider) must reach
+    pr-review-bot's demo bootstrap, or the mocked review reports/prices a
+    model the reader never chose. chosenProvider() alone (the checked radio)
+    never captured this -- only confirmLlmProviderModel()'s own sessionStorage
+    write (static/index.html) has it, under the literal key this file must
+    keep in sync with STORAGE_KEYS["llm-provider"] there."""
+    assert "model=" in DEMO_JS
+    assert "onboarding.llmProvider" in DEMO_JS
+    assert "chosenModel" in DEMO_JS
+    # Still never reaches into the live model <select> itself -- it reads
+    # the value confirmLlmProviderModel() already mirrored to sessionStorage,
+    # same non-interference discipline as the provider-picker test above.
+    assert "llm-provider-model-select" not in DEMO_JS

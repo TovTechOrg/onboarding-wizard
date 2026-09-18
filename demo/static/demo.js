@@ -312,10 +312,39 @@
     return checked ? checked.value : null;
   }
 
+  // static/index.html's STORAGE_KEYS lives inside that page's own inline
+  // <script> block (a separate top-level scope from this file, which loads
+  // as its own <script src>), so it can't be imported here -- the literal
+  // value has to be kept in sync with STORAGE_KEYS["llm-provider"] there by
+  // hand. confirmLlmProviderModel() (static/index.html) writes
+  // {provider, model} to this key right after a successful /api/llm/confirm,
+  // which is the reader's actual model pick from the LLM frame's model
+  // select -- the piece chosenProvider() alone never captured.
+  var LLM_PROVIDER_STORAGE_KEY = "onboarding.llmProvider";
+
+  function chosenModel(provider) {
+    try {
+      var raw = sessionStorage.getItem(LLM_PROVIDER_STORAGE_KEY);
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      // Only trust it when it's for the SAME provider currently checked --
+      // a stale entry from an earlier, since-changed radio pick must not be
+      // forwarded as if it were this provider's model.
+      if (parsed && parsed.provider === provider && typeof parsed.model === "string") {
+        return parsed.model;
+      }
+    } catch (err) {
+      // best-effort -- a missing/malformed entry just means no model param.
+    }
+    return null;
+  }
+
   function wireServiceLink() {
     // finishRenderDeploy() sets this href to the created service's URL, which
     // demo/render_client.py returns as the bot demo. Append the reader's
-    // provider choice so the review they land on reports it.
+    // provider AND model choice so the review they land on reports both --
+    // pr-review-bot's demo/routes.py::bootstrap() reads a `model` query
+    // param the same way it already read `provider`.
     //
     // Found during 2026-09-17 final-review manual verification (C1):
     // static/index.html's own markup gives this anchor a default
@@ -340,6 +369,10 @@
         link.href =
           link.href + (link.href.indexOf("?") === -1 ? "?" : "&") +
           "provider=" + encodeURIComponent(provider);
+        var model = chosenModel(provider);
+        if (model) {
+          link.href += "&model=" + encodeURIComponent(model);
+        }
       }
       link.dataset.demoWired = "1";
     });
