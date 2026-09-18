@@ -335,6 +335,13 @@ before it caused harm, both in `pr-review-bot`'s `store.py`, and
 prose standing in for a check. Validate in a predicate every writer calls,
 not in prose about who calls you.
 
+**Push ordering when a change set spans both repos:** push `pr-review-bot`
+to its `main` first, then run `uv run python -m scripts.update_bot_contract`
+here before committing and pushing. It re-vendors `contracts/
+provisioning.json` and its pin against `pr-review-bot`'s `origin/main` --
+running it before that repo's own push pins against a commit about to be
+superseded.
+
 ## Rules
 
 - **Never log a visitor-supplied credential**, in full or truncated — same
