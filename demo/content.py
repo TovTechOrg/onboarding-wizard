@@ -38,6 +38,15 @@ DEPLOY_POLLS_BEFORE_LIVE = 1
 # 3-poll/10s-interval pairing).
 DEMO_RENDER_DEPLOY_POLL_INTERVAL_MS = 2000
 
+# Kept a byte-for-byte match with the sibling pr-review-bot repo's own
+# `demo/model_catalog.py::MODELS_BY_PROVIDER` -- neither repo can import the
+# other's Python, and pr-review-bot's demo_provider_and_model() silently
+# falls back to its own priced default for any model name it doesn't
+# recognize, so a mismatch here means a reader's model pick quietly gets
+# swapped for a different one in the review they land on (found via a
+# 2026-09-18 end-to-end check: this list already offered "gemini-2.5-pro"
+# before pr-review-bot's catalog did). If either list changes, update both
+# in the same sitting.
 GEMINI_MODELS = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-2.5-pro"]
 GROQ_MODELS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
 VERTEX_MODELS = ["gemini-flash-latest", "gemini-2.5-flash"]
